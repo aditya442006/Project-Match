@@ -3,14 +3,16 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 
-// Import all routes
+// Route imports
 import authRoutes from './modules/auth/auth.routes';
 import usersRoutes from './modules/users/users.routes';
 import skillsRoutes from './modules/skills/skills.routes';
 import projectsRoutes from './modules/projects/projects.routes';
 import teamsRoutes from './modules/teams/teams.routes';
-import teamTasksRouter from './modules/tasks/teamTasks.routes';
-import directTasksRouter from './modules/tasks/tasks.routes';
+import {
+  teamTasksRouter,
+  directTasksRouter,
+} from './modules/tasks/tasks.routes';
 import requestsRoutes from './modules/requests/requests.routes';
 import matchingRoutes from './modules/matching/matching.routes';
 import chatRoutes from './modules/chat/chat.routes';
@@ -42,8 +44,6 @@ const allowedOrigins = (
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests without an Origin header
-      // (for example, health checks and server-to-server requests)
       if (!origin) {
         return callback(null, true);
       }
@@ -69,7 +69,7 @@ app.use(
 );
 
 // --------------------------------------
-// BODY PARSING AND COOKIES
+// MIDDLEWARE
 // --------------------------------------
 
 app.use(express.json({ limit: '10mb' }));
@@ -88,9 +88,9 @@ app.use(cookieParser());
 // --------------------------------------
 
 app.get('/', (_req: Request, res: Response) => {
-  res.status(200).json({
+  return res.status(200).json({
     success: true,
-    message: 'Project-Match API is running 🚀',
+    message: 'Project-Match API is running',
     version: '1.0.0',
     health: '/health',
     api: '/api/v1',
@@ -102,7 +102,7 @@ app.get('/', (_req: Request, res: Response) => {
 // --------------------------------------
 
 app.get('/health', (_req: Request, res: Response) => {
-  res.status(200).json({
+  return res.status(200).json({
     success: true,
     status: 'healthy',
     message: 'Project-Match backend is running',
@@ -117,54 +117,31 @@ app.get('/health', (_req: Request, res: Response) => {
 
 const api = express.Router();
 
-// Authentication
 api.use('/auth', authRoutes);
-
-// Users
 api.use('/users', usersRoutes);
-
-// Skills
 api.use('/skills', skillsRoutes);
-
-// Projects
 api.use('/projects', projectsRoutes);
-
-// Teams
 api.use('/teams', teamsRoutes);
 
-// Team tasks
+// Both task routers are exported by tasks.routes.ts
 api.use('/teams', teamTasksRouter);
-
-// Direct tasks
 api.use('/tasks', directTasksRouter);
 
-// Requests
 api.use('/requests', requestsRoutes);
-
-// Matching
 api.use('/matching', matchingRoutes);
-
-// Conversations / Chat
 api.use('/conversations', chatRoutes);
-
-// Notifications
 api.use('/notifications', notificationsRoutes);
-
-// Ratings
 api.use('/ratings', ratingsRoutes);
-
-// Admin
 api.use('/admin', adminRoutes);
 
-// Mount all API routes
 app.use('/api/v1', api);
 
 // --------------------------------------
-// 404 ROUTE HANDLER
+// 404 HANDLER
 // --------------------------------------
 
 app.use((req: Request, res: Response) => {
-  res.status(404).json({
+  return res.status(404).json({
     success: false,
     error: {
       code: 'ROUTE_NOT_FOUND',
@@ -179,14 +156,13 @@ app.use((req: Request, res: Response) => {
 
 app.use(
   (
-    err: Error,
+    err: Error & { status?: number },
     _req: Request,
     res: Response,
     _next: NextFunction
   ) => {
     console.error('Global Error:', err);
 
-    // CORS error
     if (err.message.startsWith('CORS blocked')) {
       return res.status(403).json({
         success: false,
@@ -197,8 +173,7 @@ app.use(
       });
     }
 
-    const statusCode =
-      (err as Error & { status?: number }).status || 500;
+    const statusCode = err.status || 500;
 
     return res.status(statusCode).json({
       success: false,
