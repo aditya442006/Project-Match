@@ -1,4 +1,3 @@
-
 import { useEffect, useCallback } from 'react';
 
 import { useAuthStore } from '@/store/authStore';
@@ -25,7 +24,7 @@ export const useAuth = () => {
     clear,
   } = useAuthStore();
 
-  // Restore the saved Supabase session when the application loads.
+  // Restore the existing Supabase session.
   const restoreSession = useCallback(async () => {
     try {
       const {
@@ -33,65 +32,76 @@ export const useAuth = () => {
         error,
       } = await supabase.auth.getSession();
 
-      if (error || !session?.access_token) {
+      if (error) {
+        throw error;
+      }
+
+      if (!session?.access_token) {
         disconnectSocket();
         clear();
         return;
       }
 
-      // Keep the current access token in Zustand.
+      // Save the access token in Zustand.
       useAuthStore.getState().setToken(
         session.access_token
       );
 
-      // Ask the backend to validate the token and load the profile.
+      // Validate the token and fetch the user's profile.
       const meRes = await authApi.getMe();
 
-      if (!meRes.data) {
+      if (!meRes.data?.id) {
         throw new Error('User profile could not be loaded');
       }
 
-      setSession(meRes.data, session.access_token);
+      setSession(
+        meRes.data,
+        session.access_token
+      );
 
       initSocket(session.access_token);
+
     } catch (error) {
       console.error('[Restore Session Error]:', error);
 
       disconnectSocket();
+
+      await supabase.auth.signOut({
+        scope: 'local',
+      });
+
       clear();
     }
   }, [setSession, clear]);
 
-  // Restore session once when the app starts.
+  // Restore session when the application starts.
   useEffect(() => {
     if (status === 'booting') {
       void restoreSession();
     }
   }, [status, restoreSession]);
 
-  // Keep Zustand and Socket.IO synchronized with Supabase auth changes.
+  // Listen for Supabase authentication changes.
   useEffect(() => {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
+
       if (event === 'SIGNED_OUT' || !session) {
         disconnectSocket();
         clear();
         return;
       }
 
-      if (
-        event === 'TOKEN_REFRESHED' ||
-        event === 'SIGNED_IN' ||
-        event === 'INITIAL_SESSION'
-      ) {
-        useAuthStore.getState().setToken(
-          session.access_token
-        );
+      useAuthStore.getState().setToken(
+        session.access_token
+      );
 
-        if (event !== 'INITIAL_SESSION') {
-          initSocket(session.access_token);
-        }
+      if (
+        event === 'SIGNED_IN' ||
+        event === 'TOKEN_REFRESHED'
+      ) {
+        initSocket(session.access_token);
       }
     });
 
@@ -100,7 +110,7 @@ export const useAuth = () => {
     };
   }, [clear]);
 
-  // Login using the backend and save the returned Supabase session.
+  // Login.
   const login = async (payload: LoginPayload) => {
     const res = await authApi.login(payload);
 
@@ -134,12 +144,14 @@ export const useAuth = () => {
     return res.data;
   };
 
-  // Signup. Supabase may require email verification first.
+  // Signup.
   const signup = async (payload: SignupPayload) => {
     const res = await authApi.signup(payload);
 
-    const session = res.data.session;
+    const { session, user: newUser } = res.data;
 
+    // If email confirmation is enabled,
+    // Supabase may not return a session immediately.
     if (
       session?.access_token &&
       session?.refresh_token
@@ -153,23 +165,23 @@ export const useAuth = () => {
         throw error;
       }
 
-      if (res.data.user) {
-        setSession(
-          res.data.user,
-          session.access_token
-        );
+      setSession(
+        newUser,
+        session.access_token
+      );
 
-        initSocket(session.access_token);
-      }
+      initSocket(session.access_token);
     }
 
     return res.data;
   };
 
-  // Logout from Supabase and clean up application state.
+  // Logout.
   const logout = async () => {
     try {
-      await supabase.auth.signOut({ scope: 'local' });
+      await supabase.auth.signOut({
+        scope: 'local',
+      });
     } catch (error) {
       console.error('[Supabase Logout Error]:', error);
     }
@@ -178,11 +190,11 @@ export const useAuth = () => {
       await authApi.logout();
     } catch (error) {
       console.error('[API Logout Error]:', error);
-    } finally {
-      queryClient.clear();
-      disconnectSocket();
-      clear();
     }
+
+    disconnectSocket();
+    queryClient.clear();
+    clear();
   };
 
   return {
@@ -193,7 +205,7 @@ export const useAuth = () => {
     isAuthenticated: status === 'authenticated',
     isBooting: status === 'booting',
     isAdmin: user?.role === 'admin',
-    isVerified: user?.is_verified ?? true,
+    isVerified: user?.is_verified ?? false,
 
     login,
     signup,
