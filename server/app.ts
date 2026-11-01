@@ -1,53 +1,30 @@
 
-import express, {
-  Request,
-  Response,
-  NextFunction,
-} from 'express';
-
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 
-// Authentication
+// Import all routes
 import authRoutes from './modules/auth/auth.routes';
-
-// User and skill modules
 import usersRoutes from './modules/users/users.routes';
 import skillsRoutes from './modules/skills/skills.routes';
-
-// Project and team modules
 import projectsRoutes from './modules/projects/projects.routes';
 import teamsRoutes from './modules/teams/teams.routes';
-
-// Request and matching modules
+import teamTasksRouter from './modules/tasks/teamTasks.routes';
+import directTasksRouter from './modules/tasks/tasks.routes';
 import requestsRoutes from './modules/requests/requests.routes';
 import matchingRoutes from './modules/matching/matching.routes';
-
-// Communication modules
 import chatRoutes from './modules/chat/chat.routes';
 import notificationsRoutes from './modules/notifications/notifications.routes';
-
-// Task modules
-import {
-  teamTasksRouter,
-  directTasksRouter,
-} from './modules/tasks/tasks.routes';
-
-// Rating and admin modules
 import ratingsRoutes from './modules/ratings/ratings.routes';
 import adminRoutes from './modules/admin/admin.routes';
-
-// --------------------------------------------------
-// EXPRESS APPLICATION
-// --------------------------------------------------
 
 export const app = express();
 
 app.set('trust proxy', 1);
 
-// --------------------------------------------------
+// --------------------------------------
 // CORS CONFIGURATION
-// --------------------------------------------------
+// --------------------------------------
 
 const defaultOrigins = [
   'https://project-match-gilt.vercel.app',
@@ -65,7 +42,8 @@ const allowedOrigins = (
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests without an Origin header, such as health checks.
+      // Allow requests without an Origin header
+      // (for example, health checks and server-to-server requests)
       if (!origin) {
         return callback(null, true);
       }
@@ -76,24 +54,12 @@ app.use(
         return callback(null, true);
       }
 
-      console.warn('[CORS Blocked]:', origin);
-
       return callback(
-        new Error('Origin not allowed by CORS')
+        new Error(`CORS blocked this origin: ${origin}`)
       );
     },
-
     credentials: true,
-
-    methods: [
-      'GET',
-      'POST',
-      'PUT',
-      'PATCH',
-      'DELETE',
-      'OPTIONS',
-    ],
-
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
       'Content-Type',
       'Authorization',
@@ -102,15 +68,11 @@ app.use(
   })
 );
 
-// --------------------------------------------------
-// BODY AND COOKIE MIDDLEWARE
-// --------------------------------------------------
+// --------------------------------------
+// BODY PARSING AND COOKIES
+// --------------------------------------
 
-app.use(
-  express.json({
-    limit: '10mb',
-  })
-);
+app.use(express.json({ limit: '10mb' }));
 
 app.use(
   express.urlencoded({
@@ -121,114 +83,134 @@ app.use(
 
 app.use(cookieParser());
 
-// --------------------------------------------------
-// HEALTH CHECK
-// GET /health
-// --------------------------------------------------
+// --------------------------------------
+// ROOT ROUTE
+// --------------------------------------
 
-app.get('/health', (_req: Request, res: Response) => {
-  return res.status(200).json({
-    ok: true,
-    service: 'projectmatch-api',
-    timestamp: new Date().toISOString(),
+app.get('/', (_req: Request, res: Response) => {
+  res.status(200).json({
+    success: true,
+    message: 'Project-Match API is running 🚀',
+    version: '1.0.0',
+    health: '/health',
+    api: '/api/v1',
   });
 });
 
-// --------------------------------------------------
+// --------------------------------------
+// HEALTH CHECK
+// --------------------------------------
+
+app.get('/health', (_req: Request, res: Response) => {
+  res.status(200).json({
+    success: true,
+    status: 'healthy',
+    message: 'Project-Match backend is running',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+  });
+});
+
+// --------------------------------------
 // API ROUTES
-// Base URL: /api/v1
-// --------------------------------------------------
+// --------------------------------------
 
 const api = express.Router();
 
 // Authentication
 api.use('/auth', authRoutes);
 
-// Users and skills
+// Users
 api.use('/users', usersRoutes);
+
+// Skills
 api.use('/skills', skillsRoutes);
 
-// Projects and teams
+// Projects
 api.use('/projects', projectsRoutes);
+
+// Teams
 api.use('/teams', teamsRoutes);
 
-// Team tasks and direct tasks
+// Team tasks
 api.use('/teams', teamTasksRouter);
+
+// Direct tasks
 api.use('/tasks', directTasksRouter);
 
-// Requests and matching
+// Requests
 api.use('/requests', requestsRoutes);
+
+// Matching
 api.use('/matching', matchingRoutes);
 
-// Chat and notifications
+// Conversations / Chat
 api.use('/conversations', chatRoutes);
+
+// Notifications
 api.use('/notifications', notificationsRoutes);
 
-// Ratings and administration
+// Ratings
 api.use('/ratings', ratingsRoutes);
+
+// Admin
 api.use('/admin', adminRoutes);
 
-// Mount all API routes.
+// Mount all API routes
 app.use('/api/v1', api);
 
-// --------------------------------------------------
-// 404 HANDLER
-// --------------------------------------------------
+// --------------------------------------
+// 404 ROUTE HANDLER
+// --------------------------------------
 
-app.use(
-  (req: Request, res: Response) => {
-    return res.status(404).json({
-      success: false,
-      error: {
-        code: 'ROUTE_NOT_FOUND',
-        message: `Route not found: ${req.method} ${req.originalUrl}`,
-      },
-    });
-  }
-);
+app.use((req: Request, res: Response) => {
+  res.status(404).json({
+    success: false,
+    error: {
+      code: 'ROUTE_NOT_FOUND',
+      message: `Route not found: ${req.method} ${req.originalUrl}`,
+    },
+  });
+});
 
-// --------------------------------------------------
+// --------------------------------------
 // GLOBAL ERROR HANDLER
-// --------------------------------------------------
+// --------------------------------------
 
 app.use(
   (
-    err: any,
+    err: Error,
     _req: Request,
     res: Response,
     _next: NextFunction
   ) => {
-    console.error('[API Error]:', err);
+    console.error('Global Error:', err);
 
-    // CORS errors
-    if (err.message === 'Origin not allowed by CORS') {
+    // CORS error
+    if (err.message.startsWith('CORS blocked')) {
       return res.status(403).json({
         success: false,
         error: {
           code: 'CORS_ERROR',
-          message: 'This origin is not allowed to access the API.',
+          message: err.message,
         },
       });
     }
 
-    const status =
-      typeof err.status === 'number' &&
-      err.status >= 400 &&
-      err.status <= 599
-        ? err.status
-        : 500;
+    const statusCode =
+      (err as Error & { status?: number }).status || 500;
 
-    return res.status(status).json({
+    return res.status(statusCode).json({
       success: false,
       error: {
-        code: err.code || 'INTERNAL_ERROR',
+        code: 'INTERNAL_SERVER_ERROR',
         message:
-          status === 500
-            ? 'An unexpected server error occurred.'
-            : err.message || 'An unexpected error occurred.',
-        details:
-          status === 500 ? undefined : err.details,
+          statusCode >= 500
+            ? 'Internal server error'
+            : err.message,
       },
     });
   }
 );
+
+export default app;
