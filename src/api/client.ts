@@ -14,8 +14,32 @@ interface RetryableRequest extends InternalAxiosRequestConfig {
   _retry?: boolean;
 }
 
+// --------------------------------------
+// API BASE URL
+// --------------------------------------
+
+const API_BASE_URL = env.VITE_API_URL?.trim().replace(/\/+$/, '');
+
+if (!API_BASE_URL) {
+  throw new Error(
+    'VITE_API_URL is missing. Set it in Vercel Environment Variables.'
+  );
+}
+
+if (API_BASE_URL.includes('project-match-gilt.vercel.app')) {
+  throw new Error(
+    'Incorrect API URL: frontend Vercel URL detected. Use your Render backend URL.'
+  );
+}
+
+console.log('[Project-Match API Base URL]:', API_BASE_URL);
+
+// --------------------------------------
+// AXIOS CLIENT
+// --------------------------------------
+
 export const apiClient = axios.create({
-  baseURL: env.VITE_API_URL,
+  baseURL: API_BASE_URL,
   withCredentials: true,
   timeout: 20000,
   headers: {
@@ -24,7 +48,10 @@ export const apiClient = axios.create({
   },
 });
 
-// Normalize API errors into a consistent format.
+// --------------------------------------
+// ERROR NORMALIZATION
+// --------------------------------------
+
 export const normalizeError = (error: unknown): NormalizedError => {
   if (axios.isAxiosError(error)) {
     const err = error as AxiosError<{
@@ -85,12 +112,16 @@ export const normalizeError = (error: unknown): NormalizedError => {
   return {
     status: genericError?.status || 500,
     code: genericError?.code || 'INTERNAL_ERROR',
-    message: genericError?.message || 'An unexpected error occurred.',
+    message:
+      genericError?.message || 'An unexpected error occurred.',
     details: genericError?.details,
   };
 };
 
-// Attach the latest Supabase access token to every API request.
+// --------------------------------------
+// SUPABASE ACCESS TOKEN INTERCEPTOR
+// --------------------------------------
+
 apiClient.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
     try {
@@ -104,6 +135,7 @@ apiClient.interceptors.request.use(
 
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
+
         useAuthStore.getState().setToken(token);
       } else {
         delete config.headers.Authorization;
@@ -117,7 +149,10 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(normalizeError(error))
 );
 
-// Share one refresh operation between concurrent requests.
+// --------------------------------------
+// SESSION REFRESH
+// --------------------------------------
+
 let refreshPromise: Promise<string | null> | null = null;
 
 const refreshSupabaseSession = async (): Promise<string | null> => {
@@ -143,6 +178,7 @@ const refreshSupabaseSession = async (): Promise<string | null> => {
         return newToken;
       } catch (error) {
         console.error('[Session Refresh Error]:', error);
+
         return null;
       }
     })().finally(() => {
@@ -153,7 +189,10 @@ const refreshSupabaseSession = async (): Promise<string | null> => {
   return refreshPromise;
 };
 
-// Handle expired or invalid access tokens.
+// --------------------------------------
+// RESPONSE INTERCEPTOR
+// --------------------------------------
+
 apiClient.interceptors.response.use(
   (response) => response,
 
@@ -184,12 +223,12 @@ apiClient.interceptors.response.use(
         return apiClient(originalRequest);
       }
 
-      // Refresh failed: clear the local session.
+      // Refresh failed: clear the local Supabase session.
       await supabase.auth.signOut({ scope: 'local' });
 
       useAuthStore.getState().clear();
 
-      // Redirect to login if the user is not already there.
+      // Redirect to login if necessary.
       if (typeof window !== 'undefined') {
         const currentPath =
           window.location.pathname + window.location.search;
@@ -207,3 +246,5 @@ apiClient.interceptors.response.use(
     return Promise.reject(normalizeError(error));
   }
 );
+
+export default apiClient;
