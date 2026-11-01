@@ -1,13 +1,13 @@
-
 import { apiClient } from './client';
 
 import type {
   ApiResponse,
+  AuthSession,
   LoginResponseData,
   Profile,
-  AuthSession,
 } from '@/types';
 
+// Signup request
 export interface SignupPayload {
   email: string;
   password: string;
@@ -17,137 +17,95 @@ export interface SignupPayload {
   year?: number;
 }
 
+// Login request
 export interface LoginPayload {
   email: string;
   password: string;
 }
 
-export interface AuthSession {
-  access_token: string;
-  refresh_token: string;
-  expires_in?: number;
-  token_type?: string;
-  expires_at?: number;
-  user?: unknown;
-}
-
-export interface AuthResponseData {
+// Signup response
+export interface SignupResponseData {
   user: Profile;
-  session?: AuthSession | null;
-  email_verified?: boolean;
+  session: AuthSession | null;
+  email_verified: boolean;
   message?: string;
 }
 
+// Refresh response
 export interface RefreshResponseData {
   session: AuthSession;
   user?: Profile;
 }
 
 export const authApi = {
-  // Register a new account
-  signup: async (payload: SignupPayload) => {
-    const res = await apiClient.post<
-      ApiResponse<AuthResponseData>
-    >('/auth/signup', payload);
+  // Register a new user
+  signup: (payload: SignupPayload) =>
+    apiClient.post<ApiResponse<SignupResponseData>>(
+      '/auth/signup',
+      payload
+    ),
 
-    return res.data;
-  },
+  // Login
+  login: (payload: LoginPayload) =>
+    apiClient.post<ApiResponse<LoginResponseData>>(
+      '/auth/login',
+      payload
+    ),
 
-  // Login with email and password
-  login: async (payload: LoginPayload) => {
-    const res = await apiClient.post<
-      ApiResponse<LoginResponseData>
-    >('/auth/login', payload);
+  // Refresh session using Supabase refresh token
+  refresh: (refresh_token: string) =>
+    apiClient.post<ApiResponse<RefreshResponseData>>(
+      '/auth/refresh',
+      { refresh_token }
+    ),
 
-    return res.data;
-  },
-
-  // Refresh the Supabase session
-  refresh: async (refresh_token: string) => {
-    const res = await apiClient.post<
-      ApiResponse<RefreshResponseData>
-    >('/auth/refresh', { refresh_token });
-
-    return res.data;
-  },
-
-  // Exchange and validate an existing access token
-  exchangeSession: async (payload: {
+  // Exchange an existing Supabase session
+  exchangeSession: (payload: {
     access_token: string;
     refresh_token?: string;
-  }) => {
-    const res = await apiClient.post<
-      ApiResponse<{
-        session: {
-          access_token: string;
-          refresh_token?: string | null;
-        };
-        user: Profile;
-      }>
-    >('/auth/session', payload);
-
-    return res.data;
-  },
+  }) =>
+    apiClient.post<ApiResponse<{
+      user: Profile;
+    }>>('/auth/session', payload),
 
   // Logout
-  logout: async (payload?: {
-    access_token?: string;
-    refresh_token?: string;
-  }) => {
-    const res = await apiClient.post<
-      ApiResponse<{ message: string }>
-    >('/auth/logout', payload || {});
+  logout: () =>
+    apiClient.post<ApiResponse<{ message: string }>>(
+      '/auth/logout'
+    ),
 
-    return res.data;
-  },
+  // Forgot password
+  forgotPassword: (email: string) =>
+    apiClient.post<ApiResponse<{ message: string }>>(
+      '/auth/forgot-password',
+      { email }
+    ),
 
-  // Request password reset email
-  forgotPassword: async (email: string) => {
-    const res = await apiClient.post<
-      ApiResponse<{ message: string }>
-    >('/auth/forgot-password', { email });
-
-    return res.data;
-  },
-
-  // Reset password using an authenticated Supabase session
-  resetPassword: async (password: string) => {
-    const res = await apiClient.post<
-      ApiResponse<{ message: string }>
-    >('/auth/reset-password', { password });
-
-    return res.data;
-  },
+  // Reset password
+  resetPassword: (password: string) =>
+    apiClient.post<ApiResponse<{ message: string }>>(
+      '/auth/reset-password',
+      { password }
+    ),
 
   // Change password
-  changePassword: async (payload: {
+  changePassword: (payload: {
     current_password?: string;
     new_password: string;
-  }) => {
-    const res = await apiClient.post<
-      ApiResponse<{ message: string }>
-    >('/auth/change-password', {
-      password: payload.new_password,
-    });
-
-    return res.data;
-  },
+  }) =>
+    apiClient.post<ApiResponse<{ message: string }>>(
+      '/auth/change-password',
+      { password: payload.new_password }
+    ),
 
   // Resend email verification
-  resendVerification: async (email: string) => {
-    const res = await apiClient.post<
-      ApiResponse<{ message: string }>
-    >('/auth/resend-verification', { email });
+  resendVerification: (email: string) =>
+    apiClient.post<ApiResponse<{ message: string }>>(
+      '/auth/resend-verification',
+      { email }
+    ),
 
-    return res.data;
-  },
-
-  // Get currently authenticated user
-  getMe: async () => {
-    const res = await apiClient.get<
-      ApiResponse<Profile>
-    >('/auth/me');
-
-    return res.data;
-  },
+  // Get logged-in user's profile
+  getMe: () =>
+    apiClient.get<ApiResponse<Profile>>('/auth/me'),
 };
