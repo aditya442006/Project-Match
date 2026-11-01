@@ -1,7 +1,18 @@
-import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
+
+import axios, {
+  AxiosError,
+  InternalAxiosRequestConfig,
+} from 'axios';
+
 import { env } from '@/config/env';
 import { useAuthStore } from '@/store/authStore';
-import type { NormalizedError, ApiResponse } from '@/types';
+import { supabase } from '@/lib/supabase';
+
+import type { NormalizedError } from '@/types';
+
+interface RetryableRequest extends InternalAxiosRequestConfig {
+  _retry?: boolean;
+}
 
 export const apiClient = axios.create({
   baseURL: env.VITE_API_URL,
@@ -13,24 +24,6 @@ export const apiClient = axios.create({
   },
 });
 
-// Single-flight refresh token queue state
-let isRefreshing = false;
-let failedQueue: Array<{
-  resolve: (value?: unknown) => void;
-  reject: (reason?: unknown) => void;
-}> = [];
-
-const processQueue = (error: NormalizedError | null, token: string | null = null) => {
-  failedQueue.forEach((prom) => {
-    if (error) {
-      prom.reject(error);
-    } else {
-      prom.resolve(token);
-    }
-  });
-  failedQueue = [];
-};
-
 export const normalizeError = (error: unknown): NormalizedError => {
   if (axios.isAxiosError(error)) {
     const err = error as AxiosError<{
@@ -38,10 +31,7 @@ export const normalizeError = (error: unknown): NormalizedError => {
       error?: {
         code?: string;
         message?: string;
-        details?: {
-          body?: Array<{ path: (string | number)[]; message: string }>;
-          [key: string]: unknown;
-        };
+        details?: NormalizedError['details'];
       };
       message?: string;
     }>;
@@ -50,7 +40,8 @@ export const normalizeError = (error: unknown): NormalizedError => {
       return {
         status: err.response.status,
         code: err.response.data.error.code || 'UNKNOWN_ERROR',
-        message: err.response.data.error.message || 'An error occurred',
+        message:
+          err.response.data.error.message || 'An error occurred',
         details: err.response.data.error.details,
       };
     }
@@ -59,7 +50,10 @@ export const normalizeError = (error: unknown): NormalizedError => {
       return {
         status: err.response.status,
         code: `HTTP_${err.response.status}`,
-        message: err.response.data?.message || err.message || 'Request failed',
+        message:
+          err.response.data?.message ||
+          err.message ||
+          'Request failed',
         details: err.response.data as NormalizedError['details'],
       };
     }
@@ -68,18 +62,25 @@ export const normalizeError = (error: unknown): NormalizedError => {
       return {
         status: 0,
         code: 'NETWORK_ERROR',
-        message: 'Could not connect to the server. Please check your internet connection.',
+        message:
+          'Could not connect to the server. Please check your internet connection.',
       };
     }
 
     return {
       status: 0,
       code: 'REQUEST_CONFIG_ERROR',
-      message: err.message || 'An unexpected request error occurred.',
+      message: err.message || 'Unexpected request error.',
     };
   }
 
-  const genericError = error as { status?: number; code?: string; message?: string; details?: NormalizedError['details'] };
+  const genericError = error as {
+    status?: number;
+    code?: string;
+    message?: string;
+    details?: NormalizedError['details'];
+  };
+
   return {
     status: genericError?.status || 500,
     code: genericError?.code || 'INTERNAL_ERROR',
@@ -88,92 +89,109 @@ export const normalizeError = (error: unknown): NormalizedError => {
   };
 };
 
-// Request interceptor to attach Authorization token
+// Attach the latest Supabase access token to every API request.
 apiClient.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
-    const token = useAuthStore.getState().accessToken;
-    if (token && !config.headers.Authorization) {
-      config.headers.Authorization = `Bearer ${token}`;
+  async (config: InternalAxiosRequestConfig) => {
+    try {
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession();
+
+      if (!error && session?.access_token) {
+        config.headers.Authorization =
+          `Bearer ${session.access_token}`;
+
+        useAuthStore.getState().setToken(session.access_token);
+      } else {
+        config.headers.Authorization = undefined;
+      }
+    } catch (error) {
+      console.error('[Auth Token Error]:', error);
     }
+
     return config;
   },
-  (error) => {
-    return Promise.reject(normalizeError(error));
-  }
+  (error) => Promise.reject(normalizeError(error))
 );
 
-// Response interceptor with single-flight 401 refresh
+// One refresh operation is shared by concurrent failed requests.
+let refreshPromise: Promise<string | null> | null = null;
+
+const refreshSupabaseSession = async (): Promise<string | null> => {
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      try {
+        const { data, error } =
+          await supabase.auth.refreshSession();
+
+        if (error || !data.session?.access_token) {
+          return null;
+        }
+
+        useAuthStore.getState().setToken(
+          data.session.access_token
+        );
+
+        return data.session.access_token;
+      } catch (error) {
+        console.error('[Session Refresh Error]:', error);
+        return null;
+      } finally {
+        refreshPromise = null;
+      }
+    })();
+  }
+
+  return refreshPromise;
+};
+
 apiClient.interceptors.response.use(
   (response) => response,
-  async (error: AxiosError) => {
-    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
-    // Don't intercept if no original request or request already retried
+  async (error: AxiosError) => {
+    const originalRequest =
+      error.config as RetryableRequest | undefined;
+
     if (!originalRequest) {
       return Promise.reject(normalizeError(error));
     }
 
-    // Ignore 401s from /auth/* to avoid infinite refresh loops
-    const isAuthRoute = originalRequest.url?.includes('/auth/');
+    const isAuthRoute =
+      originalRequest.url?.includes('/auth/');
 
-    if (error.response?.status === 401 && !originalRequest._retry && !isAuthRoute) {
-      if (isRefreshing) {
-        // If already refreshing, wait on queue
-        return new Promise((resolve, reject) => {
-          failedQueue.push({ resolve, reject });
-        })
-          .then((token) => {
-            originalRequest._retry = true;
-            originalRequest.headers.Authorization = `Bearer ${token}`;
-            return apiClient(originalRequest);
-          })
-          .catch((err) => {
-            return Promise.reject(normalizeError(err));
-          });
-      }
-
+    if (
+      error.response?.status === 401 &&
+      !originalRequest._retry &&
+      !isAuthRoute
+    ) {
       originalRequest._retry = true;
-      isRefreshing = true;
 
-      try {
-        // Refresh token endpoint uses the httpOnly cookie pm_refresh
-        const refreshResponse = await axios.post<
-          ApiResponse<{
-            session?: { access_token: string; refresh_token?: string };
-            access_token?: string;
-          }>
-        >(`${env.VITE_API_URL}/auth/refresh`, {}, { withCredentials: true });
+      const newToken = await refreshSupabaseSession();
 
-        const data = refreshResponse.data?.data;
-        const newToken = data?.session?.access_token || data?.access_token;
-
-        if (!newToken) {
-          throw new Error('No access token returned from refresh');
-        }
-
-        useAuthStore.getState().setToken(newToken);
-        originalRequest.headers.Authorization = `Bearer ${newToken}`;
-
-        processQueue(null, newToken);
+      if (newToken) {
+        originalRequest.headers.Authorization =
+          `Bearer ${newToken}`;
 
         return apiClient(originalRequest);
-      } catch (refreshErr) {
-        const normalizedRefreshErr = normalizeError(refreshErr);
-        processQueue(normalizedRefreshErr, null);
+      }
 
-        // Hard logout on refresh failure
-        useAuthStore.getState().clear();
+      // Refresh failed: clear local session and authentication state.
+      await supabase.auth.signOut({ scope: 'local' });
 
-        if (typeof window !== 'undefined') {
-          const currentPath = window.location.pathname + window.location.search;
-          if (!currentPath.startsWith('/login') && !currentPath.startsWith('/register')) {
-            window.location.href = `/login?next=${encodeURIComponent(currentPath)}`;
-          }
+      useAuthStore.getState().clear();
+
+      if (typeof window !== 'undefined') {
+        const currentPath =
+          window.location.pathname + window.location.search;
+
+        if (
+          !currentPath.startsWith('/login') &&
+          !currentPath.startsWith('/register')
+        ) {
+          window.location.href =
+            `/login?next=${encodeURIComponent(currentPath)}`;
         }
-
-        return Promise.reject(normalizedRefreshErr);
-      } finally {
-        isRefreshing = false;
       }
     }
 
