@@ -1,7 +1,19 @@
+
 import { Server as SocketIOServer, Socket } from 'socket.io';
-import jwt from 'jsonwebtoken';
-import { JWT_ACCESS_SECRET } from '../middleware/auth';
+import { createClient } from '@supabase/supabase-js';
 import { db } from '../config/db';
+
+const supabaseUrl = process.env.SUPABASE_URL!;
+const supabaseKey =
+  process.env.SUPABASE_PUBLISHABLE_KEY ||
+  process.env.SUPABASE_ANON_KEY!;
+
+const supabase = createClient(supabaseUrl, supabaseKey, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
+  },
+});
 
 export function initSockets(httpServer: any) {
   const io = new SocketIOServer(httpServer, {
@@ -12,52 +24,54 @@ export function initSockets(httpServer: any) {
     transports: ['websocket', 'polling'],
   });
 
-  // Socket.IO authentication middleware
-  io.use((socket: Socket, next) => {
+  // Verify Socket.IO connections using Supabase Auth.
+  io.use(async (socket: Socket, next) => {
     const token = socket.handshake.auth?.token;
+
     if (!token) {
-      // Allow fallback in development if no token
-      (socket as any).userId = 'user-aditya';
-      return next();
+      return next(new Error('Authentication required'));
     }
 
     try {
-      const payload = jwt.verify(token, JWT_ACCESS_SECRET) as { sub: string };
-      (socket as any).userId = payload.sub;
+      const { data, error } = await supabase.auth.getUser(token);
+
+      if (error || !data.user) {
+        return next(new Error('Invalid authentication token'));
+      }
+
+      (socket as any).userId = data.user.id;
       next();
-    } catch (err) {
-      // Accept demo user fallback in dev
-      (socket as any).userId = 'user-aditya';
-      next();
+    } catch {
+      next(new Error('Socket authentication failed'));
     }
   });
 
   io.on('connection', (socket: Socket) => {
     const userId = (socket as any).userId;
+
     socket.join(`user:${userId}`);
 
-    // Broadcast online presence
-    io.emit('presence:update', { userId, online: true });
+    io.emit('presence:update', {
+      userId,
+      online: true,
+    });
 
-    // Join conversation room
     socket.on('chat:join', (conversationId: string, ack?: (res: any) => void) => {
       socket.join(`conversation:${conversationId}`);
       if (ack) ack({ ok: true });
     });
 
-    // Leave conversation room
     socket.on('chat:leave', (conversationId: string) => {
       socket.leave(`conversation:${conversationId}`);
     });
 
-    // Send chat message
     socket.on('chat:message', ({ conversationId, text, attachments }: any, ack?: (res: any) => void) => {
       if (!text || !text.trim() || text.length > 2000) {
         if (ack) ack({ error: 'INVALID' });
         return;
       }
 
-      const sender = db.users.find((u) => u.id === userId) || db.users[0];
+      const sender = db.users.find((u) => u.id === userId);
 
       const newMsg = {
         id: `msg-${Date.now()}`,
@@ -73,13 +87,14 @@ export function initSockets(httpServer: any) {
 
       db.messages.push(newMsg);
 
-      // Emit to conversation room
-      io.to(`conversation:${conversationId}`).emit('chat:message', newMsg);
+      io.to(`conversation:${conversationId}`).emit(
+        'chat:message',
+        newMsg
+      );
 
       if (ack) ack({ ok: true, id: newMsg.id });
     });
 
-    // Typing indicator
     socket.on('chat:typing', ({ conversationId, isTyping }: any) => {
       socket.to(`conversation:${conversationId}`).emit('chat:typing', {
         userId,
@@ -88,7 +103,6 @@ export function initSockets(httpServer: any) {
       });
     });
 
-    // Read receipt
     socket.on('chat:read', ({ conversationId }: any) => {
       socket.to(`conversation:${conversationId}`).emit('chat:read', {
         userId,
@@ -96,23 +110,26 @@ export function initSockets(httpServer: any) {
       });
     });
 
-    // Join task/team room
     socket.on('task:join', (teamId: string) => {
       socket.join(`team:${teamId}`);
     });
 
-    // Move task
     socket.on('task:move', ({ taskId, status, position }: any) => {
       const task = db.tasks.find((t) => t.id === taskId);
+
       if (task) {
         task.status = status;
         task.position = position;
+
         io.to(`team:${task.team_id}`).emit('task:moved', task);
       }
     });
 
     socket.on('disconnect', () => {
-      io.emit('presence:update', { userId, online: false });
+      io.emit('presence:update', {
+        userId,
+        online: false,
+      });
     });
   });
 
