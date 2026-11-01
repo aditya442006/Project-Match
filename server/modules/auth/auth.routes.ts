@@ -27,6 +27,18 @@ const createSupabaseClient = (accessToken?: string) => {
   });
 };
 
+const sendError = (
+  res: Response,
+  status: number,
+  code: string,
+  message: string
+) => {
+  return res.status(status).json({
+    success: false,
+    error: { code, message },
+  });
+};
+
 const getProfile = async (accessToken: string, userId: string) => {
   const client = createSupabaseClient(accessToken);
 
@@ -44,30 +56,24 @@ const getProfile = async (accessToken: string, userId: string) => {
   return data;
 };
 
-const sendError = (
-  res: Response,
-  status: number,
-  code: string,
-  message: string
-) => {
-  return res.status(status).json({
-    success: false,
-    error: { code, message },
-  });
-};
-
-// POST /auth/signup
+// SIGNUP
 router.post('/signup', async (req: Request, res: Response) => {
   try {
-    const { email, password, name, college, branch, year } = req.body;
+    const {
+      email,
+      password,
+      name,
+      college,
+      branch,
+      year,
+    } = req.body || {};
 
     if (
-      !email ||
-      !password ||
-      !name ||
       typeof email !== 'string' ||
       typeof password !== 'string' ||
-      typeof name !== 'string'
+      typeof name !== 'string' ||
+      !email.trim() ||
+      !name.trim()
     ) {
       return sendError(
         res,
@@ -96,7 +102,7 @@ router.post('/signup', async (req: Request, res: Response) => {
           name: name.trim(),
           college: college || 'College Student',
           branch: branch || 'Engineering',
-          year: year ? Number(year) : 1,
+          year: Number(year) || 1,
         },
         ...(process.env.CLIENT_URL
           ? { emailRedirectTo: process.env.CLIENT_URL }
@@ -104,20 +110,15 @@ router.post('/signup', async (req: Request, res: Response) => {
       },
     });
 
-    if (error) {
-      return sendError(res, 400, 'SIGNUP_FAILED', error.message);
-    }
-
-    if (!data.user) {
+    if (error || !data.user) {
       return sendError(
         res,
         400,
         'SIGNUP_FAILED',
-        'Unable to create account'
+        error?.message || 'Unable to create account'
       );
     }
 
-    // The database trigger creates the profile.
     let profile = null;
 
     if (data.session) {
@@ -144,6 +145,7 @@ router.post('/signup', async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error('[Signup Error]:', error.message);
+
     return sendError(
       res,
       500,
@@ -153,12 +155,17 @@ router.post('/signup', async (req: Request, res: Response) => {
   }
 });
 
-// POST /auth/login
+// LOGIN
 router.post('/login', async (req: Request, res: Response) => {
   try {
-    const { email, password } = req.body;
+    const { email, password } = req.body || {};
 
-    if (!email || !password) {
+    if (
+      typeof email !== 'string' ||
+      typeof password !== 'string' ||
+      !email.trim() ||
+      !password
+    ) {
       return sendError(
         res,
         422,
@@ -170,7 +177,7 @@ router.post('/login', async (req: Request, res: Response) => {
     const client = createSupabaseClient();
 
     const { data, error } = await client.auth.signInWithPassword({
-      email: String(email).trim().toLowerCase(),
+      email: email.trim().toLowerCase(),
       password,
     });
 
@@ -216,6 +223,7 @@ router.post('/login', async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error('[Login Error]:', error.message);
+
     return sendError(
       res,
       500,
@@ -225,13 +233,16 @@ router.post('/login', async (req: Request, res: Response) => {
   }
 });
 
-// POST /auth/refresh
+// REFRESH SESSION
+// IMPORTANT: This endpoint accepts POST, not GET.
 router.post('/refresh', async (req: Request, res: Response) => {
   try {
-    const refreshToken =
-      req.body?.refresh_token || req.cookies?.pm_refresh;
+    const refreshToken = req.body?.refresh_token;
 
-    if (!refreshToken) {
+    if (
+      typeof refreshToken !== 'string' ||
+      !refreshToken.trim()
+    ) {
       return sendError(
         res,
         401,
@@ -278,6 +289,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error('[Refresh Error]:', error.message);
+
     return sendError(
       res,
       500,
@@ -287,10 +299,10 @@ router.post('/refresh', async (req: Request, res: Response) => {
   }
 });
 
-// POST /auth/session
+// VERIFY EXISTING SESSION
 router.post('/session', async (req: Request, res: Response) => {
   try {
-    const { access_token, refresh_token } = req.body || {};
+    const { access_token } = req.body || {};
 
     if (!access_token) {
       return sendError(
@@ -301,7 +313,7 @@ router.post('/session', async (req: Request, res: Response) => {
       );
     }
 
-    const client = createSupabaseClient(access_token);
+    const client = createSupabaseClient();
 
     const {
       data: { user },
@@ -331,15 +343,12 @@ router.post('/session', async (req: Request, res: Response) => {
     return res.json({
       success: true,
       data: {
-        session: {
-          access_token,
-          refresh_token: refresh_token || null,
-        },
         user: profile,
       },
     });
   } catch (error: any) {
     console.error('[Session Error]:', error.message);
+
     return sendError(
       res,
       500,
@@ -349,45 +358,23 @@ router.post('/session', async (req: Request, res: Response) => {
   }
 });
 
-// POST /auth/logout
-router.post('/logout', async (req: Request, res: Response) => {
-  try {
-    const { access_token, refresh_token } = req.body || {};
-
-    if (access_token && refresh_token) {
-      const client = createSupabaseClient();
-
-      await client.auth.setSession({
-        access_token,
-        refresh_token,
-      });
-
-      await client.auth.signOut({ scope: 'local' });
-    }
-
-    res.clearCookie('pm_refresh');
-
-    return res.json({
-      success: true,
-      data: { message: 'Logged out successfully' },
-    });
-  } catch (error: any) {
-    console.error('[Logout Error]:', error.message);
-    return sendError(
-      res,
-      400,
-      'LOGOUT_ERROR',
-      'Unable to complete logout'
-    );
-  }
+// LOGOUT
+router.post('/logout', async (_req: Request, res: Response) => {
+  // The frontend should also call supabase.auth.signOut().
+  return res.json({
+    success: true,
+    data: {
+      message: 'Logged out successfully',
+    },
+  });
 });
 
-// POST /auth/forgot-password
+// FORGOT PASSWORD
 router.post('/forgot-password', async (req: Request, res: Response) => {
   try {
-    const { email } = req.body;
+    const { email } = req.body || {};
 
-    if (!email) {
+    if (typeof email !== 'string' || !email.trim()) {
       return sendError(
         res,
         422,
@@ -396,20 +383,28 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
       );
     }
 
+    if (!process.env.CLIENT_URL) {
+      return sendError(
+        res,
+        500,
+        'CONFIGURATION_ERROR',
+        'CLIENT_URL is not configured'
+      );
+    }
+
     const client = createSupabaseClient();
 
     const { error } = await client.auth.resetPasswordForEmail(
-      String(email).trim().toLowerCase(),
+      email.trim().toLowerCase(),
       {
-        redirectTo: process.env.CLIENT_URL,
+        redirectTo: `${process.env.CLIENT_URL}/reset-password`,
       }
     );
 
     if (error) {
-      console.error('[Password Reset Request]:', error.message);
+      console.error('[Forgot Password Error]:', error.message);
     }
 
-    // Avoid revealing whether an account exists.
     return res.json({
       success: true,
       data: {
@@ -418,6 +413,7 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error('[Forgot Password Error]:', error.message);
+
     return sendError(
       res,
       500,
@@ -427,13 +423,13 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
   }
 });
 
-// POST /auth/reset-password
+// RESET PASSWORD
 router.post(
   '/reset-password',
   requireAuth,
   async (req: AuthRequest, res: Response) => {
     try {
-      const { password } = req.body;
+      const { password } = req.body || {};
 
       if (typeof password !== 'string' || password.length < 8) {
         return sendError(
@@ -464,6 +460,7 @@ router.post(
       });
     } catch (error: any) {
       console.error('[Reset Password Error]:', error.message);
+
       return sendError(
         res,
         500,
@@ -474,13 +471,13 @@ router.post(
   }
 );
 
-// POST /auth/change-password
+// CHANGE PASSWORD
 router.post(
   '/change-password',
   requireAuth,
   async (req: AuthRequest, res: Response) => {
     try {
-      const { password } = req.body;
+      const { password } = req.body || {};
 
       if (typeof password !== 'string' || password.length < 8) {
         return sendError(
@@ -511,6 +508,7 @@ router.post(
       });
     } catch (error: any) {
       console.error('[Change Password Error]:', error.message);
+
       return sendError(
         res,
         500,
@@ -521,14 +519,14 @@ router.post(
   }
 );
 
-// POST /auth/resend-verification
+// RESEND VERIFICATION
 router.post(
   '/resend-verification',
   async (req: Request, res: Response) => {
     try {
-      const { email } = req.body;
+      const { email } = req.body || {};
 
-      if (!email) {
+      if (typeof email !== 'string' || !email.trim()) {
         return sendError(
           res,
           422,
@@ -541,7 +539,7 @@ router.post(
 
       const { error } = await client.auth.resend({
         type: 'signup',
-        email: String(email).trim().toLowerCase(),
+        email: email.trim().toLowerCase(),
       });
 
       if (error) {
@@ -556,6 +554,7 @@ router.post(
       });
     } catch (error: any) {
       console.error('[Resend Verification Error]:', error.message);
+
       return sendError(
         res,
         500,
@@ -566,7 +565,7 @@ router.post(
   }
 );
 
-// GET /auth/me
+// CURRENT USER
 router.get('/me', requireAuth, (req: AuthRequest, res: Response) => {
   return res.json({
     success: true,
