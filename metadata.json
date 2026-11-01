@@ -1,0 +1,6 @@
+{
+  "name": "ProjectMatch",
+  "description": "AI-powered student project & team formation platform with skill matching, real-time workspace, and peer ratings.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
