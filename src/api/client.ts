@@ -24,6 +24,7 @@ export const apiClient = axios.create({
   },
 });
 
+// Normalize API errors into a consistent format.
 export const normalizeError = (error: unknown): NormalizedError => {
   if (axios.isAxiosError(error)) {
     const err = error as AxiosError<{
@@ -93,18 +94,19 @@ export const normalizeError = (error: unknown): NormalizedError => {
 apiClient.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
     try {
-      const {
-        data: { session },
-        error,
-      } = await supabase.auth.getSession();
+      const { data, error } = await supabase.auth.getSession();
 
-      if (!error && session?.access_token) {
-        config.headers.Authorization =
-          `Bearer ${session.access_token}`;
+      if (error) {
+        throw error;
+      }
 
-        useAuthStore.getState().setToken(session.access_token);
+      const token = data.session?.access_token;
+
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+        useAuthStore.getState().setToken(token);
       } else {
-        config.headers.Authorization = undefined;
+        delete config.headers.Authorization;
       }
     } catch (error) {
       console.error('[Auth Token Error]:', error);
@@ -115,7 +117,7 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(normalizeError(error))
 );
 
-// One refresh operation is shared by concurrent failed requests.
+// Share one refresh operation between concurrent requests.
 let refreshPromise: Promise<string | null> | null = null;
 
 const refreshSupabaseSession = async (): Promise<string | null> => {
@@ -126,26 +128,32 @@ const refreshSupabaseSession = async (): Promise<string | null> => {
           await supabase.auth.refreshSession();
 
         if (error || !data.session?.access_token) {
+          console.error(
+            '[Session Refresh Error]:',
+            error?.message || 'No refreshed session returned'
+          );
+
           return null;
         }
 
-        useAuthStore.getState().setToken(
-          data.session.access_token
-        );
+        const newToken = data.session.access_token;
 
-        return data.session.access_token;
+        useAuthStore.getState().setToken(newToken);
+
+        return newToken;
       } catch (error) {
         console.error('[Session Refresh Error]:', error);
         return null;
-      } finally {
-        refreshPromise = null;
       }
-    })();
+    })().finally(() => {
+      refreshPromise = null;
+    });
   }
 
   return refreshPromise;
 };
 
+// Handle expired or invalid access tokens.
 apiClient.interceptors.response.use(
   (response) => response,
 
@@ -176,11 +184,12 @@ apiClient.interceptors.response.use(
         return apiClient(originalRequest);
       }
 
-      // Refresh failed: clear local session and authentication state.
+      // Refresh failed: clear the local session.
       await supabase.auth.signOut({ scope: 'local' });
 
       useAuthStore.getState().clear();
 
+      // Redirect to login if the user is not already there.
       if (typeof window !== 'undefined') {
         const currentPath =
           window.location.pathname + window.location.search;
