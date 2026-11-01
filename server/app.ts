@@ -19,9 +19,19 @@ export const app = express();
 
 app.set('trust proxy', 1);
 
+const allowedOrigins = (
+  process.env.CLIENT_URL ||
+  'https://project-match-gilt.vercel.app,http://localhost:3000,http://localhost:5173'
+)
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 app.use(
   cors({
-    origin: true,
+    origin: (origin, callback) => {
+      callback(null, !origin || allowedOrigins.includes(origin));
+    },
     credentials: true,
   })
 );
