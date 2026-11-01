@@ -1,3 +1,4 @@
+
 import { apiClient } from './client';
 
 import type {
@@ -7,7 +8,10 @@ import type {
   Profile,
 } from '@/types';
 
-// Signup request
+// --------------------------------------
+// REQUEST TYPES
+// --------------------------------------
+
 export interface SignupPayload {
   email: string;
   password: string;
@@ -17,13 +21,15 @@ export interface SignupPayload {
   year?: number;
 }
 
-// Login request
 export interface LoginPayload {
   email: string;
   password: string;
 }
 
-// Signup response
+// --------------------------------------
+// RESPONSE TYPES
+// --------------------------------------
+
 export interface SignupResponseData {
   user: Profile;
   session: AuthSession | null;
@@ -31,81 +37,129 @@ export interface SignupResponseData {
   message?: string;
 }
 
-// Refresh response
 export interface RefreshResponseData {
   session: AuthSession;
   user?: Profile;
 }
 
+// --------------------------------------
+// AUTH API
+// --------------------------------------
+
 export const authApi = {
-  // Register a new user
+  // ------------------------------------
+  // SIGNUP
+  // POST /api/v1/auth/signup
+  // ------------------------------------
+
   signup: (payload: SignupPayload) =>
     apiClient.post<ApiResponse<SignupResponseData>>(
       '/auth/signup',
       payload
     ),
 
-  // Login
+  // ------------------------------------
+  // LOGIN
+  // POST /api/v1/auth/login
+  // ------------------------------------
+
   login: (payload: LoginPayload) =>
     apiClient.post<ApiResponse<LoginResponseData>>(
       '/auth/login',
       payload
     ),
 
-  // Refresh session using Supabase refresh token
+  // ------------------------------------
+  // REFRESH SESSION
+  // POST /api/v1/auth/refresh
+  // ------------------------------------
+
   refresh: (refresh_token: string) =>
     apiClient.post<ApiResponse<RefreshResponseData>>(
       '/auth/refresh',
       { refresh_token }
     ),
 
-  // Exchange an existing Supabase session
+  // ------------------------------------
+  // EXCHANGE SESSION
+  // POST /api/v1/auth/session
+  // ------------------------------------
+
   exchangeSession: (payload: {
     access_token: string;
     refresh_token?: string;
   }) =>
-    apiClient.post<ApiResponse<{
-      user: Profile;
-    }>>('/auth/session', payload),
+    apiClient.post<ApiResponse<{ user: Profile }>>(
+      '/auth/session',
+      payload
+    ),
 
-  // Logout
+  // ------------------------------------
+  // LOGOUT
+  // POST /api/v1/auth/logout
+  // ------------------------------------
+
   logout: () =>
     apiClient.post<ApiResponse<{ message: string }>>(
       '/auth/logout'
     ),
 
-  // Forgot password
+  // ------------------------------------
+  // FORGOT PASSWORD
+  // POST /api/v1/auth/forgot-password
+  // ------------------------------------
+
   forgotPassword: (email: string) =>
     apiClient.post<ApiResponse<{ message: string }>>(
       '/auth/forgot-password',
       { email }
     ),
 
-  // Reset password
+  // ------------------------------------
+  // RESET PASSWORD
+  // POST /api/v1/auth/reset-password
+  // ------------------------------------
+
   resetPassword: (password: string) =>
     apiClient.post<ApiResponse<{ message: string }>>(
       '/auth/reset-password',
       { password }
     ),
 
-  // Change password
+  // ------------------------------------
+  // CHANGE PASSWORD
+  // POST /api/v1/auth/change-password
+  // ------------------------------------
+
   changePassword: (payload: {
     current_password?: string;
     new_password: string;
   }) =>
     apiClient.post<ApiResponse<{ message: string }>>(
       '/auth/change-password',
-      { password: payload.new_password }
+      {
+        password: payload.new_password,
+      }
     ),
 
-  // Resend email verification
+  // ------------------------------------
+  // RESEND EMAIL VERIFICATION
+  // POST /api/v1/auth/resend-verification
+  // ------------------------------------
+
   resendVerification: (email: string) =>
     apiClient.post<ApiResponse<{ message: string }>>(
       '/auth/resend-verification',
       { email }
     ),
 
-  // Get logged-in user's profile
+  // ------------------------------------
+  // GET CURRENT USER
+  // GET /api/v1/auth/me
+  // ------------------------------------
+
   getMe: () =>
     apiClient.get<ApiResponse<Profile>>('/auth/me'),
 };
+
+export default authApi;
