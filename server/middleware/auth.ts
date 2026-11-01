@@ -1,23 +1,41 @@
 
-import { Request, Response, NextFunction } from 'express';
-import { createClient } from '@supabase/supabase-js';
+import {
+  Request,
+  Response,
+  NextFunction,
+} from 'express';
+
+import {
+  createClient,
+  User,
+} from '@supabase/supabase-js';
 
 export interface AuthRequest extends Request {
   user?: any;
-  authUser?: any;
+  authUser?: User;
 }
 
-// Create a request-scoped Supabase client using the user's access token.
+interface UserProfile {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  is_active?: boolean;
+  [key: string]: any;
+}
+
+// Create a Supabase client using the current user's access token.
 const createAuthenticatedClient = (token: string) => {
   const supabaseUrl = process.env.SUPABASE_URL;
 
-  // Use the publishable key (or legacy anon key), NOT the service-role key.
   const supabaseKey =
     process.env.SUPABASE_PUBLISHABLE_KEY ||
     process.env.SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Supabase URL or publishable key is missing');
+    throw new Error(
+      'SUPABASE_URL or Supabase publishable/anon key is missing'
+    );
   }
 
   return createClient(supabaseUrl, supabaseKey, {
@@ -34,14 +52,16 @@ const createAuthenticatedClient = (token: string) => {
   });
 };
 
+// Verify Supabase access token and load user profile.
 export const requireAuth = async (
   req: AuthRequest,
   res: Response,
   next: NextFunction
 ) => {
-  const header = req.headers.authorization || '';
-  const token = header.startsWith('Bearer ')
-    ? header.slice(7).trim()
+  const authorization = req.headers.authorization || '';
+
+  const token = authorization.startsWith('Bearer ')
+    ? authorization.substring(7).trim()
     : null;
 
   if (!token) {
@@ -57,7 +77,7 @@ export const requireAuth = async (
   try {
     const supabase = createAuthenticatedClient(token);
 
-    // Verify the token with Supabase Auth.
+    // Step 1: Verify access token with Supabase Auth.
     const {
       data: { user: authUser },
       error: authError,
@@ -73,15 +93,21 @@ export const requireAuth = async (
       });
     }
 
-    // Fetch the user's permanent profile.
-    const { data: profile, error: profileError } = await supabase
+    // Step 2: Fetch permanent user profile.
+    const {
+      data: profile,
+      error: profileError,
+    } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', authUser.id)
       .maybeSingle();
 
     if (profileError) {
-      console.error('[Profile Lookup Error]:', profileError.message);
+      console.error(
+        '[Profile Lookup Error]:',
+        profileError.message
+      );
 
       return res.status(500).json({
         success: false,
@@ -92,6 +118,7 @@ export const requireAuth = async (
       });
     }
 
+    // Step 3: Check whether profile exists.
     if (!profile) {
       return res.status(404).json({
         success: false,
@@ -102,7 +129,10 @@ export const requireAuth = async (
       });
     }
 
-    if (profile.is_active === false) {
+    const userProfile = profile as UserProfile;
+
+    // Step 4: Check account status.
+    if (userProfile.is_active === false) {
       return res.status(403).json({
         success: false,
         error: {
@@ -112,16 +142,19 @@ export const requireAuth = async (
       });
     }
 
+    // Step 5: Attach authenticated user to request.
     req.authUser = authUser;
+
     req.user = {
-      ...profile,
+      ...userProfile,
       id: authUser.id,
-      email: authUser.email,
+      email: authUser.email || userProfile.email,
     };
 
     return next();
-  } catch (error: any) {
-    console.error('[Authentication Error]:', error.message);
+
+  } catch (error) {
+    console.error('[Authentication Error]:', error);
 
     return res.status(500).json({
       success: false,
@@ -133,14 +166,29 @@ export const requireAuth = async (
   }
 };
 
+// Role-based authorization middleware.
 export const requireRole = (...roles: string[]) => {
-  return (req: AuthRequest, res: Response, next: NextFunction) => {
-    if (!req.user || !roles.includes(req.user.role)) {
+  return (
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction
+  ) => {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: {
+          code: 'UNAUTHENTICATED',
+          message: 'Authentication required',
+        },
+      });
+    }
+
+    if (!roles.includes(req.user.role)) {
       return res.status(403).json({
         success: false,
         error: {
           code: 'FORBIDDEN',
-          message: 'Not allowed',
+          message: 'You do not have permission to perform this action',
         },
       });
     }
