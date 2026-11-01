@@ -1,3 +1,6 @@
+
+import 'dotenv/config';
+
 import http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -11,35 +14,51 @@ const isProduction = process.env.NODE_ENV === 'production';
 async function startServer() {
   const httpServer = http.createServer(app);
 
-  // Initialize real-time Socket.IO gateway on the same HTTP server
+  // Initialize Socket.IO on the same HTTP server
   initSockets(httpServer);
 
   if (!isProduction) {
-    // Mount Vite dev server middleware in development
+    // Development: run Vite middleware
     const { createServer: createViteServer } = await import('vite');
+
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+      },
       appType: 'spa',
     });
+
     app.use(vite.middlewares);
   } else {
-    // Serve production static build
+    // Production: serve the built React frontend
     const express = (await import('express')).default;
     const distPath = path.resolve(__dirname, 'dist');
+
     app.use(express.static(distPath));
-    app.get('*', (_req, res) => {
-      res.sendFile(path.resolve(distPath, 'index.html'));
+
+    // React Router fallback
+    app.get('*', (req, res, next) => {
+      if (req.path.startsWith('/api/')) {
+        return next();
+      }
+
+      res.sendFile(path.join(distPath, 'index.html'));
     });
   }
 
   httpServer.listen(PORT, '0.0.0.0', () => {
-    console.log(`[ProjectMatch Server] Running at http://0.0.0.0:${PORT} in ${isProduction ? 'production' : 'development'} mode`);
-    console.log(`[ProjectMatch API] REST endpoints available at /api/v1/*`);
-    console.log(`[ProjectMatch Sockets] Socket.IO gateway active on port ${PORT}`);
+    console.log(
+      `[ProjectMatch Server] Running on port ${PORT} in ${
+        isProduction ? 'production' : 'development'
+      } mode`
+    );
+
+    console.log('[ProjectMatch API] Available at /api/v1/*');
+    console.log('[ProjectMatch Sockets] Socket.IO gateway active');
   });
 }
 
-startServer().catch((err) => {
-  console.error('[Fatal Server Startup Error]:', err);
+startServer().catch((error) => {
+  console.error('[Fatal Server Startup Error]:', error);
   process.exit(1);
 });
