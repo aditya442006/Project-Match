@@ -8,12 +8,23 @@ This guide gets your ProjectMatch frontend up and running locally, connected to 
 
 - **Node.js**: v18.0.0 or higher (v20+ recommended)
 - **npm**: v9+ or **pnpm** / **yarn**
-- **ProjectMatch Backend**: Express + Socket.IO server running (typically on `http://localhost:5000`)
-- **Supabase Project**: Initialized project with PostgreSQL database and Supabase Auth
+- **Unified Full-Stack Architecture**: The Express backend, REST API server, and Socket.IO real-time gateway are integrated with the Vite frontend through `server.ts`. Both run together concurrently on a single port (3000 in development).
+- **Database Configuration**: Supabase client (`server/config/db.ts`) with pre-seeded in-memory store for skills, student profiles, projects, workspaces, and real-time chat.
 
 ---
 
-## 2. Environment Configuration
+## 2. Server Architecture & Included Backend Components
+
+The repository includes the complete backend implementation:
+
+| Component | Path | Description |
+| :--- | :--- | :--- |
+| **Unified Server** | `/server.ts` | Mounts Express, HTTP server, Socket.IO, and Vite middlewares |
+| **REST API Server** | `/server/app.ts` | Express application mounting `/api/v1/*` domain routes |
+| **Database Config** | `/server/config/db.ts` | Supabase client + database models & pre-seeded data |
+| **Auth & Security** | `/server/middleware/auth.ts` | JWT verification (`requireAuth`, `requireRole`) & token rotation |
+| **Socket.IO Server** | `/server/sockets/index.ts` | Handshake auth, rooms (`user:*`, `conversation:*`, `team:*`), real-time chat, typing indicators, and task events |
+| **API Domain Routes**| `/server/modules/*` | Auth, Users, Skills, Projects, Teams, Requests, Matching, Chat, Notifications, Tasks, Ratings, Admin |
 
 The repository contains `.env.example` and `.env` configured with your Supabase credentials:
 

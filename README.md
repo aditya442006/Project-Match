@@ -11,20 +11,38 @@ ProjectMatch is an AI-powered student collaboration and team formation web appli
 ---
 
 ## Architecture Overview
+ 
+ ```
+                                    ┌────────────────────────┐
+                                    │      Client Browser    │
+                                    │ React SPA + TanStack Q │
+                                    └───────────┬────────────┘
+                                                │
+                          ┌─────────────────────┴─────────────────────┐
+                          │                                           │
+                          ▼                                           ▼
+          HTTPS REST API (/api/v1/*)                  Socket.IO Gateway (Handshake Auth)
+          Auth, Users, Skills, Projects,              Real-time Chat, Typing Indicators,
+          Matching, Tasks, Ratings, Admin             Kanban Task Events, Notifications
+                          │                                           │
+                          └─────────────────────┬─────────────────────┘
+                                                │
+                                    ┌───────────▼────────────┐
+                                    │   Express + Socket.IO  │
+                                    │        Server.ts       │
+                                    └───────────┬────────────┘
+                                                │
+                                    ┌───────────▼────────────┐
+                                    │    Supabase Postgres   │
+                                    │  Auth & Seeded Datadb  │
+                                    └────────────────────────┘
+ ```
 
-```
-                      ┌──────────────────────────────────────┐
-                      │    ProjectMatch Frontend (React)     │
-                      │   Vite + TS + Zustand + Query v5     │
-                      └──────────────────┬───────────────────┘
-                                         │
-                 ┌───────────────────────┴───────────────────────┐
-                 │                                               │
-                 ▼                                               ▼
-     HTTPS REST API (withCredentials)            Socket.IO Gateway (Handshake Auth)
-      /api/v1 (Auth, Users, Projects,             Real-time Chat, Typing Indicators,
-       Matching, Tasks, Ratings)                   Kanban Updates, In-App Notifications
-```
+### Included Backend Server Components
+- **Express Backend Server** (`server/app.ts` & `server.ts`): Fully working REST server mounted at `/api/v1/*`.
+- **Socket.IO Real-Time Server** (`server/sockets/index.ts`): Handshake auth verification, rooms (`user:${id}`, `conversation:${id}`, `team:${id}`), typing broadcast, real-time message delivery, and Kanban task drag events.
+- **Database & Taxonomy Configuration** (`server/config/db.ts`): Supabase client initialization + persistent in-memory database pre-seeded with real college skills, demo students, projects, teams, and task boards.
+- **Role-Based Access Control** (`server/middleware/auth.ts`): In-memory JWT access token rotation, httpOnly `pm_refresh` cookie, `requireAuth` and `requireRole('admin')` guards.
 
 ### Environment Variables
 Configure `.env` using `.env.example`:

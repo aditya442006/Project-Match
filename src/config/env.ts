@@ -8,27 +8,22 @@ const envSchema = z.object({
 });
 
 const parseEnv = () => {
+  const defaultApiUrl =
+    import.meta.env.VITE_API_URL ||
+    (typeof window !== 'undefined' ? `${window.location.origin}/api/v1` : 'http://localhost:3000/api/v1');
+
+  const defaultSocketUrl =
+    import.meta.env.VITE_SOCKET_URL ||
+    (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
+
   const rawEnv = {
-    VITE_API_URL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1',
-    VITE_SOCKET_URL: import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000',
+    VITE_API_URL: defaultApiUrl,
+    VITE_SOCKET_URL: defaultSocketUrl,
     VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL || 'https://yxlijrdavohgigtlbmpl.supabase.co',
     VITE_SUPABASE_ANON_KEY: import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_8FbmU4dHIrj_IGJncqpRfg_mnA77m76',
   };
 
-  const result = envSchema.safeParse(rawEnv);
-
-  if (!result.success) {
-    console.error('Invalid environment configuration:', result.error.format());
-    // Fall back to defaults to avoid breaking the UI rendering
-    return {
-      VITE_API_URL: 'http://localhost:5000/api/v1',
-      VITE_SOCKET_URL: 'http://localhost:5000',
-      VITE_SUPABASE_URL: 'https://yxlijrdavohgigtlbmpl.supabase.co',
-      VITE_SUPABASE_ANON_KEY: 'sb_publishable_8FbmU4dHIrj_IGJncqpRfg_mnA77m76',
-    };
-  }
-
-  return result.data;
+  return rawEnv;
 };
 
 export const env = parseEnv();
