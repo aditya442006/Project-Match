@@ -1,17 +1,20 @@
 
 import { apiClient } from './client';
+import type { Profile, AuthSession, LoginResponseData } from '@/types';
 
-import type {
-  ApiResponse,
-  AuthSession,
-  LoginResponseData,
-  Profile,
-} from '@/types';
+// Standard backend response format
+export interface AuthApiResponse<T> {
+  success: boolean;
+  data: T;
+  error?: {
+    code?: string;
+    message?: string;
+    details?: unknown;
+  };
+  message?: string;
+}
 
-// ======================================
-// REQUEST TYPES
-// ======================================
-
+// Request types
 export interface SignupPayload {
   email: string;
   password: string;
@@ -26,10 +29,7 @@ export interface LoginPayload {
   password: string;
 }
 
-// ======================================
-// RESPONSE TYPES
-// ======================================
-
+// Response data types
 export interface SignupResponseData {
   user: Profile;
   session: AuthSession | null;
@@ -39,61 +39,27 @@ export interface SignupResponseData {
 
 export interface RefreshResponseData {
   session: AuthSession;
-  user?: Profile;
+  user: Profile;
 }
 
-export interface LogoutResponseData {
-  message: string;
+export interface SessionResponseData {
+  user: Profile;
 }
 
 export interface MessageResponseData {
   message: string;
 }
 
-// ======================================
-// API ERROR / RESPONSE TYPES
-// ======================================
-
-interface ApiError {
-  code?: string;
-  message?: string;
-  details?: unknown;
-}
-
-export interface AuthApiResponse<T> {
-  success: boolean;
-  data: T;
-  error?: ApiError;
-  message?: string;
-}
-
-// ======================================
-// AUTH API
-// ======================================
-
+// API functions
 export const authApi = {
-  // ------------------------------------
-  // SIGNUP
-  // POST /api/v1/auth/signup
-  // ------------------------------------
-
   signup: (payload: SignupPayload) =>
     apiClient.post<AuthApiResponse<SignupResponseData>>(
       '/auth/signup',
       {
+        ...payload,
         email: payload.email.trim().toLowerCase(),
-        password: payload.password,
-        name: payload.name.trim(),
-        college: payload.college,
-        branch: payload.branch,
-        year: payload.year,
       }
     ),
-
-  // ------------------------------------
-  // LOGIN
-  // POST /api/v1/auth/login
-  // ------------------------------------
 
   login: (payload: LoginPayload) =>
     apiClient.post<AuthApiResponse<LoginResponseData>>(
@@ -104,108 +70,56 @@ export const authApi = {
       }
     ),
 
-  // ------------------------------------
-  // REFRESH SESSION
-  // POST /api/v1/auth/refresh
-  // ------------------------------------
-
   refresh: (refresh_token: string) =>
     apiClient.post<AuthApiResponse<RefreshResponseData>>(
       '/auth/refresh',
-      {
-        refresh_token,
-      }
+      { refresh_token }
     ),
-
-  // ------------------------------------
-  // EXCHANGE SESSION
-  // POST /api/v1/auth/session
-  // ------------------------------------
 
   exchangeSession: (payload: {
     access_token: string;
     refresh_token?: string;
   }) =>
-    apiClient.post<AuthApiResponse<{ user: Profile }>>(
+    apiClient.post<AuthApiResponse<SessionResponseData>>(
       '/auth/session',
       payload
     ),
 
-  // ------------------------------------
-  // LOGOUT
-  // POST /api/v1/auth/logout
-  // ------------------------------------
-
   logout: () =>
-    apiClient.post<AuthApiResponse<LogoutResponseData>>(
+    apiClient.post<AuthApiResponse<MessageResponseData>>(
       '/auth/logout'
     ),
-
-  // ------------------------------------
-  // FORGOT PASSWORD
-  // POST /api/v1/auth/forgot-password
-  // ------------------------------------
 
   forgotPassword: (email: string) =>
     apiClient.post<AuthApiResponse<MessageResponseData>>(
       '/auth/forgot-password',
-      {
-        email: email.trim().toLowerCase(),
-      }
+      { email: email.trim().toLowerCase() }
     ),
-
-  // ------------------------------------
-  // RESET PASSWORD
-  // POST /api/v1/auth/reset-password
-  // ------------------------------------
 
   resetPassword: (password: string) =>
     apiClient.post<AuthApiResponse<MessageResponseData>>(
       '/auth/reset-password',
-      {
-        password,
-      }
+      { password }
     ),
 
-  // ------------------------------------
-  // CHANGE PASSWORD
-  // POST /api/v1/auth/change-password
-  // ------------------------------------
-
+  // Your backend expects the field name "password".
   changePassword: (payload: {
     current_password?: string;
     new_password: string;
   }) =>
     apiClient.post<AuthApiResponse<MessageResponseData>>(
       '/auth/change-password',
-      {
-        current_password: payload.current_password,
-        new_password: payload.new_password,
-      }
+      { password: payload.new_password }
     ),
-
-  // ------------------------------------
-  // RESEND EMAIL VERIFICATION
-  // POST /api/v1/auth/resend-verification
-  // ------------------------------------
 
   resendVerification: (email: string) =>
     apiClient.post<AuthApiResponse<MessageResponseData>>(
       '/auth/resend-verification',
-      {
-        email: email.trim().toLowerCase(),
-      }
+      { email: email.trim().toLowerCase() }
     ),
-
-  // ------------------------------------
-  // GET CURRENT USER
-  // GET /api/v1/auth/me
-  // ------------------------------------
 
   getMe: () =>
-    apiClient.get<AuthApiResponse<Profile>>(
-      '/auth/me'
-    ),
+    apiClient.get<AuthApiResponse<Profile>>('/auth/me'),
 };
 
 export default authApi;
