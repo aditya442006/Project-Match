@@ -8,9 +8,9 @@ import type {
   Profile,
 } from '@/types';
 
-// --------------------------------------
+// ======================================
 // REQUEST TYPES
-// --------------------------------------
+// ======================================
 
 export interface SignupPayload {
   email: string;
@@ -26,9 +26,9 @@ export interface LoginPayload {
   password: string;
 }
 
-// --------------------------------------
+// ======================================
 // RESPONSE TYPES
-// --------------------------------------
+// ======================================
 
 export interface SignupResponseData {
   user: Profile;
@@ -42,9 +42,34 @@ export interface RefreshResponseData {
   user?: Profile;
 }
 
-// --------------------------------------
+export interface LogoutResponseData {
+  message: string;
+}
+
+export interface MessageResponseData {
+  message: string;
+}
+
+// ======================================
+// API ERROR / RESPONSE TYPES
+// ======================================
+
+interface ApiError {
+  code?: string;
+  message?: string;
+  details?: unknown;
+}
+
+export interface AuthApiResponse<T> {
+  success: boolean;
+  data: T;
+  error?: ApiError;
+  message?: string;
+}
+
+// ======================================
 // AUTH API
-// --------------------------------------
+// ======================================
 
 export const authApi = {
   // ------------------------------------
@@ -53,9 +78,16 @@ export const authApi = {
   // ------------------------------------
 
   signup: (payload: SignupPayload) =>
-    apiClient.post<ApiResponse<SignupResponseData>>(
+    apiClient.post<AuthApiResponse<SignupResponseData>>(
       '/auth/signup',
-      payload
+      {
+        email: payload.email.trim().toLowerCase(),
+        password: payload.password,
+        name: payload.name.trim(),
+        college: payload.college,
+        branch: payload.branch,
+        year: payload.year,
+      }
     ),
 
   // ------------------------------------
@@ -64,9 +96,12 @@ export const authApi = {
   // ------------------------------------
 
   login: (payload: LoginPayload) =>
-    apiClient.post<ApiResponse<LoginResponseData>>(
+    apiClient.post<AuthApiResponse<LoginResponseData>>(
       '/auth/login',
-      payload
+      {
+        email: payload.email.trim().toLowerCase(),
+        password: payload.password,
+      }
     ),
 
   // ------------------------------------
@@ -75,9 +110,11 @@ export const authApi = {
   // ------------------------------------
 
   refresh: (refresh_token: string) =>
-    apiClient.post<ApiResponse<RefreshResponseData>>(
+    apiClient.post<AuthApiResponse<RefreshResponseData>>(
       '/auth/refresh',
-      { refresh_token }
+      {
+        refresh_token,
+      }
     ),
 
   // ------------------------------------
@@ -89,7 +126,7 @@ export const authApi = {
     access_token: string;
     refresh_token?: string;
   }) =>
-    apiClient.post<ApiResponse<{ user: Profile }>>(
+    apiClient.post<AuthApiResponse<{ user: Profile }>>(
       '/auth/session',
       payload
     ),
@@ -100,7 +137,7 @@ export const authApi = {
   // ------------------------------------
 
   logout: () =>
-    apiClient.post<ApiResponse<{ message: string }>>(
+    apiClient.post<AuthApiResponse<LogoutResponseData>>(
       '/auth/logout'
     ),
 
@@ -110,9 +147,11 @@ export const authApi = {
   // ------------------------------------
 
   forgotPassword: (email: string) =>
-    apiClient.post<ApiResponse<{ message: string }>>(
+    apiClient.post<AuthApiResponse<MessageResponseData>>(
       '/auth/forgot-password',
-      { email }
+      {
+        email: email.trim().toLowerCase(),
+      }
     ),
 
   // ------------------------------------
@@ -121,9 +160,11 @@ export const authApi = {
   // ------------------------------------
 
   resetPassword: (password: string) =>
-    apiClient.post<ApiResponse<{ message: string }>>(
+    apiClient.post<AuthApiResponse<MessageResponseData>>(
       '/auth/reset-password',
-      { password }
+      {
+        password,
+      }
     ),
 
   // ------------------------------------
@@ -135,10 +176,11 @@ export const authApi = {
     current_password?: string;
     new_password: string;
   }) =>
-    apiClient.post<ApiResponse<{ message: string }>>(
+    apiClient.post<AuthApiResponse<MessageResponseData>>(
       '/auth/change-password',
       {
-        password: payload.new_password,
+        current_password: payload.current_password,
+        new_password: payload.new_password,
       }
     ),
 
@@ -148,9 +190,11 @@ export const authApi = {
   // ------------------------------------
 
   resendVerification: (email: string) =>
-    apiClient.post<ApiResponse<{ message: string }>>(
+    apiClient.post<AuthApiResponse<MessageResponseData>>(
       '/auth/resend-verification',
-      { email }
+      {
+        email: email.trim().toLowerCase(),
+      }
     ),
 
   // ------------------------------------
@@ -159,7 +203,9 @@ export const authApi = {
   // ------------------------------------
 
   getMe: () =>
-    apiClient.get<ApiResponse<Profile>>('/auth/me'),
+    apiClient.get<AuthApiResponse<Profile>>(
+      '/auth/me'
+    ),
 };
 
 export default authApi;
