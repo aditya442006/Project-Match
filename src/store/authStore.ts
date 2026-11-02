@@ -1,18 +1,31 @@
 
 import { create } from 'zustand';
-import type { Profile } from '@/types';
 
-type AuthStatus = 'booting' | 'authenticated' | 'anonymous';
+import type {
+  AuthSession,
+  Profile,
+} from '@/types';
 
 interface AuthState {
   user: Profile | null;
   accessToken: string | null;
-  status: AuthStatus;
+  session: AuthSession | null;
 
-  setSession: (user: Profile, token: string) => void;
+  status: 'booting' | 'authenticated' | 'anonymous';
+
+  setSession: (
+    user: Profile,
+    token: string,
+    session?: AuthSession | null
+  ) => void;
+
   setUser: (user: Profile) => void;
   setToken: (token: string) => void;
-  setStatus: (status: AuthStatus) => void;
+
+  setStatus: (
+    status: 'booting' | 'authenticated' | 'anonymous'
+  ) => void;
+
   clear: () => void;
 }
 
@@ -27,13 +40,13 @@ if (
 }
 
 export const useAuthStore = create<AuthState>((set) => {
-  // Listen for logout events from other browser tabs.
   if (authChannel) {
     authChannel.onmessage = (event) => {
       if (event.data === 'auth:logout') {
         set({
           user: null,
           accessToken: null,
+          session: null,
           status: 'anonymous',
         });
       }
@@ -43,42 +56,46 @@ export const useAuthStore = create<AuthState>((set) => {
   return {
     user: null,
     accessToken: null,
+    session: null,
     status: 'booting',
 
-    // Save authenticated user and access token.
-    setSession: (user, token) => {
+    // Save user, access token and complete Supabase session.
+    setSession: (user, token, session = null) => {
       set({
         user,
+        accessToken: token,
+        session,
+        status: 'authenticated',
+      });
+    },
+
+    setUser: (user) => {
+      set({ user });
+    },
+
+    setToken: (token) => {
+      set({
         accessToken: token,
         status: 'authenticated',
       });
     },
 
-    // Update user profile.
-    setUser: (user) => {
-      set({ user });
-    },
-
-    // Update token without changing authentication status.
-    setToken: (token) => {
-      set({ accessToken: token });
-    },
-
-    // Update authentication status.
     setStatus: (status) => {
       set({ status });
     },
 
-    // Clear authentication data.
+    // Clear all authentication information.
     clear: () => {
       set({
         user: null,
         accessToken: null,
+        session: null,
         status: 'anonymous',
       });
 
-      // Notify other browser tabs.
-      authChannel?.postMessage('auth:logout');
+      if (authChannel) {
+        authChannel.postMessage('auth:logout');
+      }
     },
   };
 });
