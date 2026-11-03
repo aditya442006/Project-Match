@@ -767,6 +767,13 @@ router.post(
           '[Resend Verification Error]:',
           error.message
         );
+
+        return sendError(
+          res,
+          502,
+          'VERIFICATION_SEND_FAILED',
+          'Supabase could not send the verification email. Check the Supabase Auth email settings and try again later.'
+        );
       }
 
       return res.json({
