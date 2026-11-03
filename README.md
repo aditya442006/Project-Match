@@ -34,14 +34,14 @@ ProjectMatch is an AI-powered student collaboration and team formation web appli
                                                 │
                                     ┌───────────▼────────────┐
                                     │    Supabase Postgres   │
-                                    │  Auth & Seeded Datadb  │
+                                    │ Auth & App State Store │
                                     └────────────────────────┘
  ```
 
 ### Included Backend Server Components
 - **Express Backend Server** (`server/app.ts` & `server.ts`): Fully working REST server mounted at `/api/v1/*`.
 - **Socket.IO Real-Time Server** (`server/sockets/index.ts`): Handshake auth verification, rooms (`user:${id}`, `conversation:${id}`, `team:${id}`), typing broadcast, real-time message delivery, and Kanban task drag events.
-- **Database & Taxonomy Configuration** (`server/config/db.ts`): Supabase client initialization + persistent in-memory database pre-seeded with real college skills, demo students, projects, teams, and task boards.
+- **Database & Taxonomy Configuration** (`server/config/db.ts`, `server/config/persistence.ts`): Supabase Auth profiles plus persistent application records for skills, users, projects, teams, tasks, conversations, requests, notifications, ratings, and admin data.
 - **Role-Based Access Control** (`server/middleware/auth.ts`): In-memory JWT access token rotation, httpOnly `pm_refresh` cookie, `requireAuth` and `requireRole('admin')` guards.
 
 ### Environment Variables
@@ -49,10 +49,15 @@ Configure `.env` using `.env.example`:
 
 | Variable | Description | Example |
 | :--- | :--- | :--- |
-| `VITE_API_URL` | Base URL for REST API endpoints (`withCredentials: true`) | `http://localhost:5000/api/v1` |
-| `VITE_SOCKET_URL` | Server URL for WebSocket connection | `http://localhost:5000` |
+| `VITE_API_URL` | Base URL for REST API endpoints (`withCredentials: true`) | `http://localhost:3000/api/v1` locally; `https://project-match-t42v.onrender.com/api/v1` in production |
+| `VITE_SOCKET_URL` | Server URL for WebSocket connection | `http://localhost:3000` locally; `https://project-match-t42v.onrender.com` in production |
 | `VITE_SUPABASE_URL` | Supabase project URL | `https://yxlijrdavohgigtlbmpl.supabase.co` |
 | `VITE_SUPABASE_ANON_KEY` | Supabase public anon key | Public key only (never service_role) |
+| `SUPABASE_URL` | Backend Supabase project URL | Same Supabase project URL |
+| `SUPABASE_PUBLISHABLE_KEY` | Backend key used to verify user sessions | Public publishable key |
+| `SUPABASE_SECRET_KEY` | Server-only key used to persist app records | Set as a secret in Render; never expose to the frontend |
+
+Before starting the backend, apply [`supabase/migrations/20261103000000_create_project_match_state.sql`](./supabase/migrations/20261103000000_create_project_match_state.sql) in the Supabase SQL Editor. The server loads its records from Supabase at startup and saves API and real-time changes there; it will fail to start if the migration or server-only key is missing.
 
 ---
 

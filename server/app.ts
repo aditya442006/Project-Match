@@ -19,6 +19,7 @@ import chatRoutes from './modules/chat/chat.routes';
 import notificationsRoutes from './modules/notifications/notifications.routes';
 import ratingsRoutes from './modules/ratings/ratings.routes';
 import adminRoutes from './modules/admin/admin.routes';
+import { persistDatabase } from './config/persistence';
 
 export const app = express();
 
@@ -116,6 +117,33 @@ app.get('/health', (_req: Request, res: Response) => {
 // --------------------------------------
 
 const api = express.Router();
+
+api.use((_req: Request, res: Response, next: NextFunction) => {
+  const sendJson = res.json.bind(res);
+
+  res.json = ((body: unknown) => {
+    void persistDatabase()
+      .then(() => sendJson(body))
+      .catch((error: unknown) => {
+        console.error('[Supabase Persistence Error]:', error);
+
+        if (!res.headersSent && !res.writableEnded) {
+          res.status(503);
+          sendJson({
+            success: false,
+            error: {
+              code: 'DATABASE_WRITE_FAILED',
+              message: 'Unable to save application data. Please retry.',
+            },
+          });
+        }
+      });
+
+    return res;
+  }) as Response['json'];
+
+  next();
+});
 
 api.use('/auth', authRoutes);
 api.use('/users', usersRoutes);

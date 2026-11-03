@@ -15,6 +15,9 @@ export const EmailVerifiedGate: React.FC = () => {
   // If user is not verified, they can only access /verify-email, /logout
   const isUnverified = user && user.is_verified === false;
   const isAllowedPath = location.pathname.startsWith('/verify-email') || location.pathname.startsWith('/logout');
+  const verifyEmailPath = user?.email
+    ? `/verify-email?email=${encodeURIComponent(user.email)}`
+    : '/verify-email';
 
   const handleResend = async () => {
     if (cooldown > 0 || resending) return;
@@ -48,7 +51,7 @@ export const EmailVerifiedGate: React.FC = () => {
   };
 
   if (isUnverified && !isAllowedPath) {
-    return <Navigate to={`/verify-email?email=${encodeURIComponent(user.email)}`} replace />;
+    return <Navigate to={verifyEmailPath} replace />;
   }
 
   return (

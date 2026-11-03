@@ -9,6 +9,7 @@ import {
   createClient,
   User,
 } from '@supabase/supabase-js';
+import { db } from '../config/db';
 
 export interface AuthRequest extends Request {
   user?: any;
@@ -145,11 +146,30 @@ export const requireAuth = async (
     // Step 5: Attach authenticated user to request.
     req.authUser = authUser;
 
-    req.user = {
+    const storedProfile = db.users.find(
+      (user) => user.id === authUser.id
+    );
+    const appProfile = Object.fromEntries(
+      Object.entries(storedProfile || {}).filter(
+        ([key]) => key !== 'passwordHash'
+      )
+    );
+    const mergedProfile = {
       ...userProfile,
+      ...appProfile,
       id: authUser.id,
       email: authUser.email || userProfile.email,
+      role: userProfile.role,
+      is_active: userProfile.is_active,
     };
+
+    if (storedProfile) {
+      Object.assign(storedProfile, mergedProfile);
+    } else {
+      db.users.push(mergedProfile);
+    }
+
+    req.user = mergedProfile;
 
     return next();
 

@@ -2,6 +2,7 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { createClient } from '@supabase/supabase-js';
 import { db } from '../config/db';
+import { persistDatabase } from '../config/persistence';
 
 const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseKey =
@@ -65,7 +66,7 @@ export function initSockets(httpServer: any) {
       socket.leave(`conversation:${conversationId}`);
     });
 
-    socket.on('chat:message', ({ conversationId, text, attachments }: any, ack?: (res: any) => void) => {
+    socket.on('chat:message', async ({ conversationId, text, attachments }: any, ack?: (res: any) => void) => {
       if (!text || !text.trim() || text.length > 2000) {
         if (ack) ack({ error: 'INVALID' });
         return;
@@ -86,6 +87,14 @@ export function initSockets(httpServer: any) {
       };
 
       db.messages.push(newMsg);
+
+      try {
+        await persistDatabase();
+      } catch (error) {
+        console.error('[Socket Message Persistence Error]:', error);
+        if (ack) ack({ error: 'PERSISTENCE_FAILED' });
+        return;
+      }
 
       io.to(`conversation:${conversationId}`).emit(
         'chat:message',
@@ -114,12 +123,23 @@ export function initSockets(httpServer: any) {
       socket.join(`team:${teamId}`);
     });
 
-    socket.on('task:move', ({ taskId, status, position }: any) => {
+    socket.on('task:move', async ({ taskId, status, position }: any) => {
       const task = db.tasks.find((t) => t.id === taskId);
 
       if (task) {
         task.status = status;
         task.position = position;
+
+        try {
+          await persistDatabase();
+        } catch (error) {
+          console.error('[Socket Task Persistence Error]:', error);
+          socket.emit('task:error', {
+            code: 'PERSISTENCE_FAILED',
+            message: 'Unable to save the task update. Please retry.',
+          });
+          return;
+        }
 
         io.to(`team:${task.team_id}`).emit('task:moved', task);
       }

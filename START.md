@@ -9,7 +9,7 @@ This guide gets your ProjectMatch frontend up and running locally, connected to 
 - **Node.js**: v18.0.0 or higher (v20+ recommended)
 - **npm**: v9+ or **pnpm** / **yarn**
 - **Unified Full-Stack Architecture**: The Express backend, REST API server, and Socket.IO real-time gateway are integrated with the Vite frontend through `server.ts`. Both run together concurrently on a single port (3000 in development).
-- **Database Configuration**: Supabase client (`server/config/db.ts`) with pre-seeded in-memory store for skills, student profiles, projects, workspaces, and real-time chat.
+- **Database Configuration**: Supabase Auth and a persistent Supabase-backed store for skills, student profiles, projects, workspaces, and real-time chat.
 
 ---
 
@@ -21,7 +21,7 @@ The repository includes the complete backend implementation:
 | :--- | :--- | :--- |
 | **Unified Server** | `/server.ts` | Mounts Express, HTTP server, Socket.IO, and Vite middlewares |
 | **REST API Server** | `/server/app.ts` | Express application mounting `/api/v1/*` domain routes |
-| **Database Config** | `/server/config/db.ts` | Supabase client + database models & pre-seeded data |
+| **Database Config** | `/server/config/db.ts`, `/server/config/persistence.ts` | Supabase client, startup hydration, and persistent application records |
 | **Auth & Security** | `/server/middleware/auth.ts` | JWT verification (`requireAuth`, `requireRole`) & token rotation |
 | **Socket.IO Server** | `/server/sockets/index.ts` | Handshake auth, rooms (`user:*`, `conversation:*`, `team:*`), real-time chat, typing indicators, and task events |
 | **API Domain Routes**| `/server/modules/*` | Auth, Users, Skills, Projects, Teams, Requests, Matching, Chat, Notifications, Tasks, Ratings, Admin |
@@ -33,21 +33,17 @@ The repository contains `.env.example` and `.env` configured with your Supabase 
 cp .env.example .env
 ```
 
-Your `.env` contains:
+Run [`supabase/migrations/20261103000000_create_project_match_state.sql`](./supabase/migrations/20261103000000_create_project_match_state.sql) in the Supabase SQL Editor, then set the backend-only Supabase variables in your local `.env` and Render:
 
 ```env
-# REST API Base URL (must end with /api/v1)
-VITE_API_URL=http://localhost:5000/api/v1
-
-# Socket.IO Gateway Server
-VITE_SOCKET_URL=http://localhost:5000
-
-# Supabase Auth Configuration (Client-safe public keys only)
-VITE_SUPABASE_URL=https://yxlijrdavohgigtlbmpl.supabase.co
-VITE_SUPABASE_ANON_KEY=sb_publishable_8FbmU4dHIrj_IGJncqpRfg_mnA77m76
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_PUBLISHABLE_KEY=your-public-publishable-key
+SUPABASE_SECRET_KEY=your-server-only-secret-key
 ```
 
-> **Security Rule**: Never add `SUPABASE_SECRET_KEY` or database master passwords to `.env` or client code. The frontend only consumes the public anonymous key. All database mutations happen via the authenticated REST API.
+> Keep `SUPABASE_SECRET_KEY` only in the ignored local `.env` and Render's secret environment variables. Never add it to frontend variables (the `VITE_` prefix) or commit it.
+
+The local frontend and backend share port `3000`; production defaults point to the Render API at `https://project-match-t42v.onrender.com`.
 
 ---
 

@@ -1,4 +1,5 @@
 import { Router, Response } from 'express';
+import { randomUUID } from 'node:crypto';
 import { db } from '../../config/db';
 import { requireAuth, AuthRequest } from '../../middleware/auth';
 
@@ -8,6 +9,20 @@ const skillsOf = (user: any): string[] => (user?.skills || []).map((s: any) => n
 const unique = (items: string[]) => [...new Set(items)];
 const ratio = (a: string[], b: string[]) => a.length ? a.filter((x) => b.includes(x)).length / a.length : 0;
 const boundedLimit = (value: unknown, fallback: number, max = 50) => Math.max(1, Math.min(max, Number.parseInt(String(value), 10) || fallback));
+const hasDismissed = (
+  userId: string,
+  candidateId: string,
+  projectId?: string
+) =>
+  db.feedback.some(
+    (feedback) =>
+      feedback.user_id === userId &&
+      feedback.candidate_id === candidateId &&
+      feedback.action === 'dismissed' &&
+      (projectId
+        ? !feedback.project_id || feedback.project_id === projectId
+        : !feedback.project_id)
+  );
 
 // Scores are deterministic rule-based estimates, not semantic/LLM scores.
 const teammateScore = (candidate: any, seeker: any) => {
@@ -54,7 +69,12 @@ const projectScore = (candidate: any, project: any) => {
 
 router.get('/teammates', requireAuth, (req: AuthRequest, res: Response) => {
   const limit = boundedLimit(req.query.limit, 10);
-  const candidates = db.users.filter((u) => u.id !== req.user.id && u.is_active !== false);
+  const candidates = db.users.filter(
+    (u) =>
+      u.id !== req.user.id &&
+      u.is_active !== false &&
+      !hasDismissed(req.user.id, u.id)
+  );
   const ranked = candidates.map((user) => ({ user: { id: user.id, name: user.name, college: user.college, branch: user.branch, year: user.year, avatar_url: user.avatar_url, skills: user.skills, interests: user.interests, reputation_avg: user.reputation_avg, reputation_count: user.reputation_count }, ...teammateScore(user, req.user) })).sort((a, b) => b.score - a.score);
   return res.json({ success: true, data: ranked.slice(0, limit) });
 });
@@ -67,7 +87,7 @@ router.get('/projects/:id/candidates', requireAuth, (req: AuthRequest, res: Resp
     if (team?.leader_id !== req.user.id) return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Only the project owner or team leader can view candidate recommendations' } });
   }
   const limit = boundedLimit(req.query.limit, 10);
-  const ranked = db.users.filter((u) => u.id !== req.user.id && u.is_active !== false).map((user) => ({ user: { id: user.id, name: user.name, college: user.college, branch: user.branch, year: user.year, avatar_url: user.avatar_url, skills: user.skills, interests: user.interests, reputation_avg: user.reputation_avg, reputation_count: user.reputation_count }, ...projectScore(user, project) })).sort((a, b) => b.score - a.score);
+  const ranked = db.users.filter((u) => u.id !== req.user.id && u.is_active !== false && !hasDismissed(req.user.id, u.id, project.id)).map((user) => ({ user: { id: user.id, name: user.name, college: user.college, branch: user.branch, year: user.year, avatar_url: user.avatar_url, skills: user.skills, interests: user.interests, reputation_avg: user.reputation_avg, reputation_count: user.reputation_count }, ...projectScore(user, project) })).sort((a, b) => b.score - a.score);
   return res.json({ success: true, data: ranked.slice(0, limit) });
 });
 
@@ -78,8 +98,107 @@ router.get('/projects', requireAuth, (req: AuthRequest, res: Response) => {
 });
 
 router.post('/feedback', requireAuth, (req: AuthRequest, res: Response) => {
-  // Do not claim to persist feedback until a feedback table is implemented.
-  return res.status(501).json({ success: false, error: { code: 'NOT_IMPLEMENTED', message: 'Matching feedback storage is not configured yet' } });
+  const {
+    candidate_id,
+    project_id,
+    action,
+    score,
+    features,
+  } = req.body || {};
+
+  if (
+    typeof candidate_id !== 'string' ||
+    !candidate_id ||
+    !['viewed', 'invited', 'dismissed'].includes(action)
+  ) {
+    return res.status(422).json({
+      success: false,
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'candidate_id and a valid action are required',
+      },
+    });
+  }
+
+  if (project_id !== undefined && (typeof project_id !== 'string' || !project_id)) {
+    return res.status(422).json({
+      success: false,
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'project_id must be a non-empty string',
+      },
+    });
+  }
+
+  if (score !== undefined && (!Number.isFinite(score) || score < 0 || score > 1)) {
+    return res.status(422).json({
+      success: false,
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'score must be a number from 0 to 1',
+      },
+    });
+  }
+
+  if (
+    features !== undefined &&
+    (!features ||
+      typeof features !== 'object' ||
+      Array.isArray(features) ||
+      Object.values(features).some((value) => !Number.isFinite(value)))
+  ) {
+    return res.status(422).json({
+      success: false,
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'features must be an object containing numeric values',
+      },
+    });
+  }
+
+  if (!db.users.some((user) => user.id === candidate_id)) {
+    return res.status(404).json({
+      success: false,
+      error: { code: 'NOT_FOUND', message: 'Candidate not found' },
+    });
+  }
+
+  if (project_id && !db.projects.some((project) => project.id === project_id)) {
+    return res.status(404).json({
+      success: false,
+      error: { code: 'NOT_FOUND', message: 'Project not found' },
+    });
+  }
+
+  const existing = db.feedback.find(
+    (feedback) =>
+      feedback.user_id === req.user.id &&
+      feedback.candidate_id === candidate_id &&
+      (feedback.project_id || undefined) === project_id
+  );
+  const timestamp = new Date().toISOString();
+  const feedback = {
+    id: existing?.id || randomUUID(),
+    user_id: req.user.id,
+    candidate_id,
+    project_id,
+    action,
+    score,
+    features,
+    created_at: existing?.created_at || timestamp,
+    updated_at: timestamp,
+  };
+
+  if (existing) {
+    Object.assign(existing, feedback);
+  } else {
+    db.feedback.unshift(feedback);
+  }
+
+  return res.status(existing ? 200 : 201).json({
+    success: true,
+    data: { message: 'Feedback recorded' },
+  });
 });
 
 export default router;

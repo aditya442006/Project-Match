@@ -1,13 +1,73 @@
-import { createClient } from '@supabase/supabase-js';
+import {
+  createClient,
+  type SupabaseClient,
+} from '@supabase/supabase-js';
 
-// Supabase configuration from environment or provided credentials
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://yxlijrdavohgigtlbmpl.supabase.co';
-const SUPABASE_KEY =
-  process.env.SUPABASE_SECRET_KEY ||
-  process.env.SUPABASE_PUBLISHABLE_KEY ||
-  'sb_publishable_8FbmU4dHIrj_IGJncqpRfg_mnA77m76';
+export type SupabaseJson =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: SupabaseJson | undefined }
+  | SupabaseJson[];
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+interface Database {
+  public: {
+    Tables: {
+      project_match_state: {
+        Row: {
+          collection: string;
+          record_id: string;
+          data: SupabaseJson;
+          updated_at: string;
+        };
+        Insert: {
+          collection: string;
+          record_id: string;
+          data: SupabaseJson;
+          updated_at?: string;
+        };
+        Update: {
+          collection?: string;
+          record_id?: string;
+          data?: SupabaseJson;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+    };
+    Views: Record<string, never>;
+    Functions: Record<string, never>;
+    Enums: Record<string, never>;
+    CompositeTypes: Record<string, never>;
+  };
+}
+
+let supabaseAdmin: SupabaseClient<Database> | null = null;
+
+export const getSupabaseAdmin = () => {
+  const url = process.env.SUPABASE_URL;
+  const key =
+    process.env.SUPABASE_SECRET_KEY ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !key) {
+    throw new Error(
+      'SUPABASE_URL and SUPABASE_SECRET_KEY (or SUPABASE_SERVICE_ROLE_KEY) are required for persistent application data.'
+    );
+  }
+
+  if (!supabaseAdmin) {
+    supabaseAdmin = createClient<Database>(url, key, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    });
+  }
+
+  return supabaseAdmin;
+};
 
 // Seeded Skills Taxonomy (Frontend, Backend, ML, Design, Mobile, DevOps, etc.)
 export const initialSkills = [
@@ -331,6 +391,7 @@ export interface DbStore {
   requests: any[];
   notifications: any[];
   ratings: any[];
+  feedback: any[];
   auditLogs: any[];
   reports: any[];
 }
@@ -382,6 +443,7 @@ export const db: DbStore = {
     },
   ],
   ratings: [] as any[],
+  feedback: [] as any[],
   auditLogs: [
     {
       id: 'audit-1',

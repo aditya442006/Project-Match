@@ -38,8 +38,8 @@ In the **Environment Variables** panel in Vercel, add:
 
 | Name | Value | Purpose |
 | :--- | :--- | :--- |
-| `VITE_API_URL` | `https://api.yourdomain.com/api/v1` | Your production backend REST API endpoint |
-| `VITE_SOCKET_URL` | `https://api.yourdomain.com` | Your production WebSocket gateway |
+| `VITE_API_URL` | `https://project-match-t42v.onrender.com/api/v1` | Render backend REST API endpoint |
+| `VITE_SOCKET_URL` | `https://project-match-t42v.onrender.com` | Render WebSocket gateway |
 | `VITE_SUPABASE_URL` | `https://yxlijrdavohgigtlbmpl.supabase.co` | Supabase project URL |
 | `VITE_SUPABASE_ANON_KEY` | `sb_publishable_8FbmU4dHIrj_IGJncqpRfg_mnA77m76` | Supabase publishable anonymous key |
 
@@ -73,13 +73,13 @@ Click **Deploy**. Within 60 seconds, your site is live at `https://<your-project
    - **Health Check Path**: `/health`
 4. In **Environment Variables**, set:
    - `NODE_ENV=production`
-   - `PORT=5000` (Render dynamically binds `$PORT`)
-   - `CLIENT_URL=https://your-frontend.vercel.app` (or `https://projectmatch.yourdomain.com`)
+   - `CLIENT_URL=https://project-match-gilt.vercel.app` (or your deployed frontend origin)
    - `SUPABASE_URL=https://yxlijrdavohgigtlbmpl.supabase.co`
-   - `SUPABASE_SECRET_KEY=sb_secret_Sh4zuCl1hE-ujPRHoWUZzg_81OU7IiD`
-   - `SUPABASE_JWKS_URL=https://yxlijrdavohgigtlbmpl.supabase.co/auth/v1/.well-known/jwks.json`
-   - `JWT_ACCESS_SECRET=<your-access-secret>`
-   - `JWT_REFRESH_SECRET=<your-refresh-secret>`
+   - `SUPABASE_PUBLISHABLE_KEY=<your-public-publishable-key>`
+   - `SUPABASE_SECRET_KEY=<your-server-only-secret-key>` (Render secret; never use a `VITE_` prefix)
+5. Apply [`supabase/migrations/20261103000000_create_project_match_state.sql`](./supabase/migrations/20261103000000_create_project_match_state.sql) in the Supabase SQL Editor before the first deployment. The backend exits at startup if its persistence table or server-only key is unavailable.
+
+Render supplies `PORT` automatically. If a Supabase secret key was previously committed to a repository or documentation, rotate it in Supabase before deploying.
 
 ### Option B: Deploying Backend API to Vercel (Serverless Functions)
 If you wish to deploy the Express REST API directly on Vercel alongside the client:

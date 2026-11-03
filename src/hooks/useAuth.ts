@@ -7,9 +7,10 @@ import type { Profile } from '@/types';
 
 export const useAuth = () => {
   const user = useAuthStore((state) => state.user);
-  const token = useAuthStore((state) => state.token);
+  const token = useAuthStore((state) => state.accessToken);
   const status = useAuthStore((state) => state.status);
   const setSession = useAuthStore((state) => state.setSession);
+  const setUser = useAuthStore((state) => state.setUser);
   const clear = useAuthStore((state) => state.clear);
 
   const restoreSession = useCallback(async () => {
@@ -195,6 +196,9 @@ export const useAuth = () => {
     token,
     status,
     isAuthenticated: Boolean(user && token),
+    isAdmin: user?.role === 'admin',
+    setSession,
+    setUser,
     login,
     signup,
     logout,
