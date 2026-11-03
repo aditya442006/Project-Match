@@ -19,9 +19,9 @@ export const NotFound: React.FC = () => {
         <Button variant="outline" onClick={() => window.history.back()} leftIcon={<ArrowLeft className="w-4 h-4" />}>
           Go Back
         </Button>
-        <Link to="/dashboard">
+        <Link to="/">
           <Button variant="primary" leftIcon={<Home className="w-4 h-4" />}>
-            Back to Dashboard
+            Back to Home
           </Button>
         </Link>
       </div>

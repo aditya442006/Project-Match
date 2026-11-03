@@ -67,7 +67,7 @@ export const VerifyEmail: React.FC = () => {
               title: 'Email Verified',
               message: 'Your email address has been successfully confirmed!',
             });
-            navigate('/dashboard', { replace: true });
+            navigate('/account', { replace: true });
             return;
           }
         }
@@ -79,7 +79,7 @@ export const VerifyEmail: React.FC = () => {
         const meRes = await authApi.getMe();
         if (meRes.data?.is_verified) {
           setUser(meRes.data);
-          navigate('/dashboard', { replace: true });
+          navigate('/account', { replace: true });
           return;
         }
         setVerificationError("Email is still pending verification. Please check your inbox or spam folder.");

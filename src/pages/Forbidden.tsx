@@ -15,9 +15,9 @@ export const Forbidden: React.FC = () => {
       <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md mb-8">
         You don't have administrative privileges to view this section of ProjectMatch.
       </p>
-      <Link to="/dashboard">
+      <Link to="/">
         <Button variant="primary" leftIcon={<Home className="w-4 h-4" />}>
-          Return to Dashboard
+          Return Home
         </Button>
       </Link>
     </div>

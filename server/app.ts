@@ -3,23 +3,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 
-// Route imports
 import authRoutes from './modules/auth/auth.routes';
-import usersRoutes from './modules/users/users.routes';
-import skillsRoutes from './modules/skills/skills.routes';
-import projectsRoutes from './modules/projects/projects.routes';
-import teamsRoutes from './modules/teams/teams.routes';
-import {
-  teamTasksRouter,
-  directTasksRouter,
-} from './modules/tasks/tasks.routes';
-import requestsRoutes from './modules/requests/requests.routes';
-import matchingRoutes from './modules/matching/matching.routes';
-import chatRoutes from './modules/chat/chat.routes';
-import notificationsRoutes from './modules/notifications/notifications.routes';
-import ratingsRoutes from './modules/ratings/ratings.routes';
-import adminRoutes from './modules/admin/admin.routes';
-import { persistDatabase } from './config/persistence';
 
 export const app = express();
 
@@ -117,50 +101,7 @@ app.get('/health', (_req: Request, res: Response) => {
 // --------------------------------------
 
 const api = express.Router();
-
-api.use((_req: Request, res: Response, next: NextFunction) => {
-  const sendJson = res.json.bind(res);
-
-  res.json = ((body: unknown) => {
-    void persistDatabase()
-      .then(() => sendJson(body))
-      .catch((error: unknown) => {
-        console.error('[Supabase Persistence Error]:', error);
-
-        if (!res.headersSent && !res.writableEnded) {
-          res.status(503);
-          sendJson({
-            success: false,
-            error: {
-              code: 'DATABASE_WRITE_FAILED',
-              message: 'Unable to save application data. Please retry.',
-            },
-          });
-        }
-      });
-
-    return res;
-  }) as Response['json'];
-
-  next();
-});
-
 api.use('/auth', authRoutes);
-api.use('/users', usersRoutes);
-api.use('/skills', skillsRoutes);
-api.use('/projects', projectsRoutes);
-api.use('/teams', teamsRoutes);
-
-// Both task routers are exported by tasks.routes.ts
-api.use('/teams', teamTasksRouter);
-api.use('/tasks', directTasksRouter);
-
-api.use('/requests', requestsRoutes);
-api.use('/matching', matchingRoutes);
-api.use('/conversations', chatRoutes);
-api.use('/notifications', notificationsRoutes);
-api.use('/ratings', ratingsRoutes);
-api.use('/admin', adminRoutes);
 
 app.use('/api/v1', api);
 

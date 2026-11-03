@@ -66,7 +66,7 @@ export const Login: React.FC = () => {
       const destination =
         next && next.startsWith('/') && !next.startsWith('//')
           ? next
-          : '/dashboard';
+          : '/account';
 
       navigate(destination, { replace: true });
     } catch (err: unknown) {

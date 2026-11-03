@@ -5,20 +5,13 @@ import http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { app } from './server/app';
-import { initSockets } from './server/sockets';
-import { initializeDatabase } from './server/config/persistence';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
 
 async function startServer() {
-  await initializeDatabase();
-
   const httpServer = http.createServer(app);
-
-  // Initialize Socket.IO on the same HTTP server
-  initSockets(httpServer);
 
   if (!isProduction) {
     // Development: run Vite middleware
@@ -55,9 +48,8 @@ async function startServer() {
         isProduction ? 'production' : 'development'
       } mode`
     );
-
     console.log('[ProjectMatch API] Available at /api/v1/*');
-    console.log('[ProjectMatch Sockets] Socket.IO gateway active');
+    console.log('[ProjectMatch API] Available at /api/v1/*');
   });
 }
 

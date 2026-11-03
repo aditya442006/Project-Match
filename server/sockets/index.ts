@@ -2,7 +2,6 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { createClient } from '@supabase/supabase-js';
 import { db } from '../config/db';
-import { persistDatabase } from '../config/persistence';
 
 const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseKey =
@@ -88,14 +87,6 @@ export function initSockets(httpServer: any) {
 
       db.messages.push(newMsg);
 
-      try {
-        await persistDatabase();
-      } catch (error) {
-        console.error('[Socket Message Persistence Error]:', error);
-        if (ack) ack({ error: 'PERSISTENCE_FAILED' });
-        return;
-      }
-
       io.to(`conversation:${conversationId}`).emit(
         'chat:message',
         newMsg
@@ -129,17 +120,6 @@ export function initSockets(httpServer: any) {
       if (task) {
         task.status = status;
         task.position = position;
-
-        try {
-          await persistDatabase();
-        } catch (error) {
-          console.error('[Socket Task Persistence Error]:', error);
-          socket.emit('task:error', {
-            code: 'PERSISTENCE_FAILED',
-            message: 'Unable to save the task update. Please retry.',
-          });
-          return;
-        }
 
         io.to(`team:${task.team_id}`).emit('task:moved', task);
       }

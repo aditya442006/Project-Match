@@ -16,7 +16,7 @@ export const GuestRoute: React.FC = () => {
 
   if (status === 'authenticated') {
     const next = searchParams.get('next');
-    return <Navigate to={next ? decodeURIComponent(next) : '/dashboard'} replace />;
+    return <Navigate to={next ? decodeURIComponent(next) : '/account'} replace />;
   }
 
   return <Outlet />;

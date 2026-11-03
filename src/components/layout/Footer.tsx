@@ -1,5 +1,4 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
 
 export const Footer: React.FC = () => {
   return (
@@ -9,24 +8,7 @@ export const Footer: React.FC = () => {
           <div className="w-5 h-5 rounded-md bg-indigo-600 text-white font-bold flex items-center justify-center text-[10px]">
             PM
           </div>
-          <span>&copy; {new Date().getFullYear()} ProjectMatch. Built for student collaboration & hackathons.</span>
-        </div>
-
-        <div className="flex items-center gap-6">
-          <Link to="/projects" className="hover:text-indigo-600 dark:hover:text-indigo-400">
-            Projects
-          </Link>
-          <Link to="/matching" className="hover:text-indigo-600 dark:hover:text-indigo-400">
-            Find Teammates
-          </Link>
-          <a
-            href="https://github.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:text-indigo-600 dark:hover:text-indigo-400"
-          >
-            GitHub
-          </a>
+          <span>&copy; {new Date().getFullYear()} ProjectMatch. Secure account access.</span>
         </div>
       </div>
     </footer>

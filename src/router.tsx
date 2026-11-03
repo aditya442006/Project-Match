@@ -1,10 +1,8 @@
 import React from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { PublicLayout } from '@/components/layout/PublicLayout';
-import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { ProtectedRoute } from '@/routes/ProtectedRoute';
 import { GuestRoute } from '@/routes/GuestRoute';
-import { AdminRoute } from '@/routes/AdminRoute';
 import { EmailVerifiedGate } from '@/routes/EmailVerifiedGate';
 
 import { Landing } from '@/pages/Landing';
@@ -15,25 +13,8 @@ import { ForgotPassword } from '@/pages/auth/ForgotPassword';
 import { ResetPassword } from '@/pages/auth/ResetPassword';
 import { Logout } from '@/pages/auth/Logout';
 
-import { Dashboard } from '@/pages/Dashboard';
-import { MyProfile } from '@/pages/profile/MyProfile';
-import { EditProfile } from '@/pages/profile/EditProfile';
-import { PublicProfile } from '@/pages/profile/PublicProfile';
-
-import { Recommendations } from '@/pages/matching/Recommendations';
-import { ProjectList } from '@/pages/projects/ProjectList';
-import { ProjectDetail } from '@/pages/projects/ProjectDetail';
-import { ProjectForm } from '@/pages/projects/ProjectForm';
-
-import { MyTeams } from '@/pages/teams/MyTeams';
-import { TeamWorkspace } from '@/pages/teams/TeamWorkspace';
-import { Requests } from '@/pages/requests/Requests';
-import { Notifications } from '@/pages/notifications/Notifications';
-import { RateTeammates } from '@/pages/ratings/RateTeammates';
-import { AdminDashboard } from '@/pages/admin/AdminDashboard';
-
+import { Account } from '@/pages/auth/Account';
 import { NotFound } from '@/pages/NotFound';
-import { Forbidden } from '@/pages/Forbidden';
 
 export const router = createBrowserRouter([
   // Public Marketing & Utility Routes
@@ -51,10 +32,6 @@ export const router = createBrowserRouter([
       {
         path: '/reset-password',
         element: <ResetPassword />,
-      },
-      {
-        path: '/403',
-        element: <Forbidden />,
       },
       // Guest-only routes
       {
@@ -83,7 +60,7 @@ export const router = createBrowserRouter([
     element: <Logout />,
   },
 
-  // Protected Routes (Session Hydration + Verification Gate + Dashboard Shell)
+  // Protected account page
   {
     element: <ProtectedRoute />,
     children: [
@@ -91,75 +68,8 @@ export const router = createBrowserRouter([
         element: <EmailVerifiedGate />,
         children: [
           {
-            element: <DashboardLayout />,
-            children: [
-              {
-                path: '/dashboard',
-                element: <Dashboard />,
-              },
-              {
-                path: '/profile/me',
-                element: <MyProfile />,
-              },
-              {
-                path: '/profile/edit',
-                element: <EditProfile />,
-              },
-              {
-                path: '/profile/:id',
-                element: <PublicProfile />,
-              },
-              {
-                path: '/matching',
-                element: <Recommendations />,
-              },
-              {
-                path: '/projects',
-                element: <ProjectList />,
-              },
-              {
-                path: '/projects/new',
-                element: <ProjectForm />,
-              },
-              {
-                path: '/projects/:id',
-                element: <ProjectDetail />,
-              },
-              {
-                path: '/projects/:id/edit',
-                element: <ProjectForm />,
-              },
-              {
-                path: '/teams',
-                element: <MyTeams />,
-              },
-              {
-                path: '/teams/:id',
-                element: <TeamWorkspace />,
-              },
-              {
-                path: '/requests',
-                element: <Requests />,
-              },
-              {
-                path: '/notifications',
-                element: <Notifications />,
-              },
-              {
-                path: '/ratings/:projectId',
-                element: <RateTeammates />,
-              },
-              // Admin only routes
-              {
-                element: <AdminRoute />,
-                children: [
-                  {
-                    path: '/admin/*',
-                    element: <AdminDashboard />,
-                  },
-                ],
-              },
-            ],
+            path: '/account',
+            element: <Account />,
           },
         ],
       },
