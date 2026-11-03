@@ -15,7 +15,7 @@ Set these Render environment variables:
 | Variable | Value |
 | --- | --- |
 | `NODE_ENV` | `production` |
-| `CLIENT_URL` | Public frontend origin. For this deployment, use `https://project-match-gilt.vercel.app` |
+| `CLIENT_URL` | `https://project-match-gilt-aditya442006.vercel.app` |
 | `SUPABASE_URL` | Supabase project URL |
 | `SUPABASE_PUBLISHABLE_KEY` | Public anon/publishable key for the same Supabase project |
 | `VITE_API_URL` | `https://your-service.onrender.com/api/v1` |
@@ -24,7 +24,7 @@ Set these Render environment variables:
 
 The `VITE_*` variables are used at build time, so redeploy after changing them. Do not add a Supabase service-role/secret key. The server does not use or require the `project_match_state` table.
 
-In Supabase, enable Auth email confirmation, set the Auth **Site URL** to `https://project-match-gilt.vercel.app`, and add that URL to the allowed redirect URLs. Ensure the `public.profiles` table and profile-creation trigger exist. `CLIENT_URL` must be the frontend URL (Vercel), not the Render API URL; it is used for both CORS and verification email redirects.
+In Supabase, enable Auth email confirmation, set the Auth **Site URL** to `https://project-match-gilt-aditya442006.vercel.app`, and add that URL to the allowed redirect URLs. Ensure the `public.profiles` table and profile-creation trigger exist. `CLIENT_URL` must be the frontend URL (Vercel), not the Render API URL; it is used for verification email redirects.
 
 ## Optional: host the frontend on Vercel
 

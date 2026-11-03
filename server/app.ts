@@ -15,14 +15,15 @@ app.set('trust proxy', 1);
 
 const defaultOrigins = [
   'https://project-match-gilt.vercel.app',
+  'https://project-match-gilt-aditya442006.vercel.app',
   'http://localhost:3000',
   'http://localhost:5173',
 ];
 
-const allowedOrigins = (
-  process.env.CLIENT_URL || defaultOrigins.join(',')
-)
-  .split(',')
+const allowedOrigins = [
+  ...defaultOrigins,
+  ...(process.env.CLIENT_URL || '').split(','),
+]
   .map((origin) => origin.trim().replace(/\/$/, ''))
   .filter(Boolean);
 

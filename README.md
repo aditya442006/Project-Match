@@ -38,7 +38,7 @@ Set these environment variables in Render:
 | Variable | Value |
 | --- | --- |
 | `NODE_ENV` | `production` |
-| `CLIENT_URL` | Public frontend origin. If using Vercel, use `https://project-match-gilt.vercel.app` |
+| `CLIENT_URL` | Public frontend origin: `https://project-match-gilt-aditya442006.vercel.app` |
 | `SUPABASE_URL` | Supabase project URL |
 | `SUPABASE_PUBLISHABLE_KEY` | Public anon/publishable key for that same project |
 | `VITE_API_URL` | `https://your-service.onrender.com/api/v1` |
@@ -49,6 +49,6 @@ Set these environment variables in Render:
 
 ## Authentication setup
 
-Enable Supabase Auth email confirmation and add the deployed frontend URL to Supabase Auth's allowed redirect URLs. When the frontend is on Vercel and the API is on Render, set `CLIENT_URL` to the Vercel frontend origin (not the Render API URL); this value is used for both CORS and email redirects. Keep the Supabase URL and public key used by the browser and Render backend pointed at the same project.
+Enable Supabase Auth email confirmation and add `https://project-match-gilt-aditya442006.vercel.app` to Supabase Auth's allowed redirect URLs. When the frontend is on Vercel and the API is on Render, set `CLIENT_URL` to this Vercel frontend origin (not the Render API URL); this value is used for email redirects, and the origin must be allowed by the Render API's CORS settings. Keep the Supabase URL and public key used by the browser and Render backend pointed at the same project.
 
 For Vercel frontend hosting or additional details, see [VERCEL_DEPLOYMENT.md](./VERCEL_DEPLOYMENT.md).
