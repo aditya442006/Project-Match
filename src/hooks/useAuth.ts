@@ -1,42 +1,16 @@
 
-import { useEffect, useCallback } from 'react';
-
-import { useAuthStore } from '@/store/authStore';
-import { authApi } from '@/api/auth.api';
+import { useCallback, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-
-import {
-  initSocket,
-  disconnectSocket,
-} from '@/socket/socket';
-
-import { useQueryClient } from '@tanstack/react-query';
-
-import type {
-  LoginPayload,
-  SignupPayload,
-} from '@/api/auth.api';
-
-import type {
-  AuthSession,
-  Profile,
-} from '@/types';
+import { authApi } from '@/api/auth.api';
+import { useAuthStore } from '@/store/authStore';
+import type { Profile } from '@/types';
 
 export const useAuth = () => {
-  const queryClient = useQueryClient();
-
-  const {
-    user,
-    accessToken,
-    status,
-    setSession,
-    setUser,
-    clear,
-  } = useAuthStore();
-
-  // ---------------------------------------
-  // RESTORE SESSION
-  // ---------------------------------------
+  const user = useAuthStore((state) => state.user);
+  const token = useAuthStore((state) => state.token);
+  const status = useAuthStore((state) => state.status);
+  const setSession = useAuthStore((state) => state.setSession);
+  const clear = useAuthStore((state) => state.clear);
 
   const restoreSession = useCallback(async () => {
     try {
@@ -45,183 +19,188 @@ export const useAuth = () => {
         error,
       } = await supabase.auth.getSession();
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
       if (!session?.access_token) {
         clear();
-        disconnectSocket();
-        return;
+        return null;
       }
 
-      // Get the latest user profile from backend.
-      const meRes = await authApi.getMe();
+      const response = await authApi.getMe();
+      const profile = response.data?.data as Profile | undefined;
 
-      const profile = meRes.data?.data as Profile | undefined;
-
-      if (!profile) {
-        throw new Error('Unable to load user profile.');
+      if (!response.data?.success || !profile) {
+        await supabase.auth.signOut();
+        clear();
+        return null;
       }
 
-      setSession(
-        profile,
-        session.access_token,
-        session as AuthSession
-      );
-
-      initSocket(session.access_token);
+      setSession(profile, session.access_token);
+      return profile;
     } catch (error) {
-      console.error('[Session Restore Error]:', error);
-
-      await supabase.auth.signOut({ scope: 'local' });
-
-      disconnectSocket();
+      console.error('[Restore Session Error]:', error);
       clear();
+      return null;
     }
-  }, [setSession, clear]);
+  }, [clear, setSession]);
 
-  // ---------------------------------------
-  // INITIAL AUTHENTICATION CHECK
-  // ---------------------------------------
+  const login = useCallback(async (payload: {
+    email: string;
+    password: string;
+  }) => {
+    const response = await authApi.login(payload);
+    const result = response.data?.data;
 
-  useEffect(() => {
-    if (status === 'booting') {
-      restoreSession();
-    }
-  }, [status, restoreSession]);
-
-  // ---------------------------------------
-  // LOGIN
-  // ---------------------------------------
-
-  const login = async (payload: LoginPayload) => {
-    try {
-      const response = await authApi.login(payload);
-
-      // IMPORTANT:
-      // Axios response -> response.data
-      // API response payload -> response.data.data
-
-      const result = response.data?.data;
-
-      if (!response.data?.success || !result) {
-        throw new Error(
-          response.data?.error?.message ||
-          'Login failed. Invalid server response.'
-        );
-      }
-
-      const { session, user: loggedInUser } = result;
-
-      if (
-        !session?.access_token ||
-        !session?.refresh_token ||
-        !loggedInUser
-      ) {
-        throw new Error(
-          'Login did not return a valid Supabase session.'
-        );
-      }
-
-      // Establish the backend-returned session in Supabase.
-      const {
-        data: sessionData,
-        error: sessionError,
-      } = await supabase.auth.setSession({
-        access_token: session.access_token,
-        refresh_token: session.refresh_token,
-      });
-
-      if (sessionError) {
-        throw sessionError;
-      }
-
-      if (!sessionData.session?.access_token) {
-        throw new Error(
-          'Supabase could not establish the login session.'
-        );
-      }
-
-      const activeSession = sessionData.session;
-
-      // Save the profile and complete session.
-      setSession(
-        loggedInUser,
-        activeSession.access_token,
-        activeSession as AuthSession
+    if (
+      !response.data?.success ||
+      !result?.session?.access_token ||
+      !result?.session?.refresh_token ||
+      !result?.user
+    ) {
+      throw new Error(
+        response.data?.error?.message || 'Invalid login response'
       );
-
-      // Connect socket using the active Supabase token.
-      initSocket(activeSession.access_token);
-
-      return {
-        ...result,
-        session: activeSession,
-        user: loggedInUser,
-      };
-    } catch (error) {
-      console.error('[Login Error]:', error);
-      throw error;
     }
-  };
 
-  // ---------------------------------------
-  // SIGNUP
-  // ---------------------------------------
+    const { data, error } = await supabase.auth.setSession({
+      access_token: result.session.access_token,
+      refresh_token: result.session.refresh_token,
+    });
 
-  const signup = async (payload: SignupPayload) => {
+    if (error || !data.session) {
+      throw new Error(error?.message || 'Unable to establish session');
+    }
+
+    setSession(result.user, data.session.access_token);
+
+    return {
+      user: result.user,
+      session: data.session,
+      email_verified: result.email_verified,
+    };
+  }, [setSession]);
+
+  const signup = useCallback(async (payload: {
+    email: string;
+    password: string;
+    name: string;
+    college?: string;
+    branch?: string;
+    year?: number;
+  }) => {
     const response = await authApi.signup(payload);
 
     if (!response.data?.success || !response.data?.data) {
       throw new Error(
-        response.data?.error?.message ||
-        'Signup failed.'
+        response.data?.error?.message || 'Signup failed'
       );
     }
 
-    return response.data.data;
-  };
+    const result = response.data.data;
 
-  // ---------------------------------------
-  // LOGOUT
-  // ---------------------------------------
+    if (
+      result.session?.access_token &&
+      result.session?.refresh_token
+    ) {
+      const { data, error } = await supabase.auth.setSession({
+        access_token: result.session.access_token,
+        refresh_token: result.session.refresh_token,
+      });
 
-  const logout = async () => {
+      if (error || !data.session) {
+        throw new Error(error?.message || 'Unable to establish session');
+      }
+
+      setSession(result.user, data.session.access_token);
+    }
+
+    return result;
+  }, [setSession]);
+
+  const logout = useCallback(async () => {
     try {
       await authApi.logout();
     } catch (error) {
       console.error('[Backend Logout Error]:', error);
     } finally {
-      try {
-        await supabase.auth.signOut({ scope: 'local' });
-      } catch (error) {
-        console.error('[Supabase Logout Error]:', error);
-      }
-
-      queryClient.clear();
-
-      disconnectSocket();
-
+      await supabase.auth.signOut();
       clear();
     }
-  };
+  }, [clear]);
+
+  const refreshSession = useCallback(async () => {
+    try {
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession();
+
+      if (error) throw error;
+
+      if (!session?.refresh_token) {
+        throw new Error('No refresh token available');
+      }
+
+      const response = await authApi.refresh(session.refresh_token);
+      const refreshed = response.data?.data?.session;
+
+      if (
+        !response.data?.success ||
+        !refreshed?.access_token ||
+        !refreshed?.refresh_token
+      ) {
+        throw new Error('Unable to refresh session');
+      }
+
+      const { data, error: sessionError } =
+        await supabase.auth.setSession({
+          access_token: refreshed.access_token,
+          refresh_token: refreshed.refresh_token,
+        });
+
+      if (sessionError || !data.session) {
+        throw new Error(
+          sessionError?.message || 'Unable to update session'
+        );
+      }
+
+      setSession(
+        response.data.data.user,
+        data.session.access_token
+      );
+
+      return data.session;
+    } catch (error) {
+      console.error('[Refresh Session Error]:', error);
+      await supabase.auth.signOut();
+      clear();
+      throw error;
+    }
+  }, [clear, setSession]);
+
+  useEffect(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || !session) {
+        clear();
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [clear]);
 
   return {
     user,
-    accessToken,
+    token,
     status,
-
-    isAuthenticated: status === 'authenticated',
-    isBooting: status === 'booting',
-    isAdmin: user?.role === 'admin',
-    isVerified: user?.is_verified ?? true,
-
+    isAuthenticated: Boolean(user && token),
     login,
     signup,
     logout,
     restoreSession,
-    setUser,
-    setSession,
+    refreshSession,
   };
 };
+
+export default useAuth;
