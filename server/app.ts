@@ -69,20 +69,6 @@ app.use(
 app.use(cookieParser());
 
 // --------------------------------------
-// ROOT ROUTE
-// --------------------------------------
-
-app.get('/', (_req: Request, res: Response) => {
-  return res.status(200).json({
-    success: true,
-    message: 'Project-Match API is running',
-    version: '1.0.0',
-    health: '/health',
-    api: '/api/v1',
-  });
-});
-
-// --------------------------------------
 // HEALTH CHECK
 // --------------------------------------
 
@@ -105,11 +91,8 @@ api.use('/auth', authRoutes);
 
 app.use('/api/v1', api);
 
-// --------------------------------------
-// 404 HANDLER
-// --------------------------------------
-
-app.use((req: Request, res: Response) => {
+// Unknown API routes should return JSON; other paths are handled by the frontend.
+app.use('/api', (req: Request, res: Response) => {
   return res.status(404).json({
     success: false,
     error: {
